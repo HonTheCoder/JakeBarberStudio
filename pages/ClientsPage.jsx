@@ -506,7 +506,8 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete }) => {
                 </div>
               )}
 
-
+              {/* General Notes */}
+              {client.notes && (
                 <div style={{ background: C.surfaceLow, borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
                   <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Notes</p>
                   <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurface, lineHeight: 1.6 }}>{client.notes}</p>
@@ -522,7 +523,7 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete }) => {
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <Icon name="history" size={36} style={{ color: C.outlineVariant, display: "block", margin: "0 auto 12px" }} />
                   <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant }}>No visit history recorded yet.</p>
-                  <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, opacity: 0.7, marginTop: 4 }}>Use "Add Visit" to start tracking.</p>
+                  <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, opacity: 0.7, marginTop: 4 }}>Visits will be recorded via QR scan check-in.</p>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
