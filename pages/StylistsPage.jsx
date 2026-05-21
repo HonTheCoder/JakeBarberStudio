@@ -1,0 +1,203 @@
+import { useState } from "react";
+import { C } from "../tokens/design";
+import { Icon, PrimaryBtn, SecondaryBtn, ErrorBanner } from "../components/ui";
+import { useStylists } from "../hooks/useFirestore";
+import { AddStylistModal, EditStylistModal, DeleteStylistModal } from "../components/modals";
+import useIsMobile from "../hooks/useIsMobile";
+
+/* ── Status badge ────────────────────────────────────────────────────────── */
+const StatusBadge = ({ status }) => {
+  const active = status === "Active";
+  return (
+    <span style={{
+      background: active ? "#dcfce7" : C.surfaceHigh,
+      color: active ? "#166534" : C.onSurfaceVariant,
+      padding: "3px 12px", borderRadius: 999,
+      fontSize: 11, fontFamily: "Geist", fontWeight: 600,
+      letterSpacing: "0.08em", textTransform: "uppercase",
+    }}>{status}</span>
+  );
+};
+
+/* ── Stylist card ────────────────────────────────────────────────────────── */
+const StylistCard = ({ stylist, onEdit, onDelete }) => (
+  <div className="card" style={{ padding: 0, overflow: "hidden", transition: "box-shadow 0.2s" }}
+    onMouseOver={e => (e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,0.10)")}
+    onMouseOut={e => (e.currentTarget.style.boxShadow = "")}
+  >
+    {/* Card header */}
+    <div style={{ padding: "24px 24px 20px", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+            background: C.secondaryContainer,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "Geist", fontSize: 16, fontWeight: 700, color: C.secondary,
+          }}>
+            {stylist.initials}
+          </div>
+          <div>
+            <div style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary }}>{stylist.name}</div>
+            <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>{stylist.role}</div>
+          </div>
+        </div>
+        <StatusBadge status={stylist.status} />
+      </div>
+    </div>
+
+    {/* Stats row */}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+      {[
+        { icon: "receipt",  label: "Bookings", value: stylist.bookings ?? 0 },
+        { icon: "payments", label: "Revenue",  value: stylist.revenue  ?? "$0" },
+      ].map(s => (
+        <div key={s.label} style={{ padding: "16px 24px", borderRight: s.label === "Bookings" ? `1px solid ${C.outlineVariant}20` : "none" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Icon name={s.icon} size={14} style={{ color: C.onSurfaceVariant }} />
+            <span style={{ fontSize: 10, fontFamily: "Geist", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant }}>{s.label}</span>
+          </div>
+          <div style={{ fontFamily: "Geist", fontSize: 20, fontWeight: 700, color: C.primary }}>{s.value}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* Contact row */}
+    {(stylist.email || stylist.phone) && (
+      <div style={{ padding: "12px 24px", borderBottom: `1px solid ${C.outlineVariant}20`, display: "flex", flexWrap: "wrap", gap: 16 }}>
+        {stylist.email && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="mail" size={13} style={{ color: C.onSurfaceVariant }} />
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{stylist.email}</span>
+          </div>
+        )}
+        {stylist.phone && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="phone" size={13} style={{ color: C.onSurfaceVariant }} />
+            <span style={{ fontSize: 12, color: C.onSurfaceVariant }}>{stylist.phone}</span>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Specialties */}
+    {stylist.specialties?.length > 0 && (
+      <div style={{ padding: "14px 24px", borderBottom: `1px solid ${C.outlineVariant}20`, display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {stylist.specialties.map(sp => (
+          <span key={sp} style={{ background: C.surfaceLow, color: C.onSurfaceVariant, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontFamily: "Geist", fontWeight: 500 }}>
+            {sp}
+          </span>
+        ))}
+      </div>
+    )}
+
+    {/* Actions */}
+    <div style={{ padding: "14px 24px", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <SecondaryBtn icon="edit" onClick={() => onEdit(stylist)}>Edit</SecondaryBtn>
+      <button
+        onClick={() => onDelete(stylist)}
+        style={{ padding: "8px 14px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <Icon name="delete" size={14} style={{ color: C.error }} />
+        Remove
+      </button>
+    </div>
+  </div>
+);
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+const StylistsPage = ({ search = "" }) => {
+  const isMobile = useIsMobile();
+  const { data: stylists, loading, error } = useStylists();
+
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [delTarget,  setDelTarget]  = useState(null);
+  const [filter,     setFilter]     = useState("All");
+
+  const filters = ["All", "Active", "Inactive"];
+
+  const q = (search ?? "").toLowerCase();
+
+  const filtered = stylists
+    .filter(s => filter === "All" || s.status === filter)
+    .filter(s =>
+      !q ||
+      s.name?.toLowerCase().includes(q) ||
+      s.role?.toLowerCase().includes(q)
+    );
+
+  const active    = stylists.filter(s => s.status === "Active").length;
+  const totalRev  = stylists.reduce((sum, s) => sum + parseFloat((s.revenue ?? "$0").replace(/[$,]/g, "")), 0);
+  const totalBook = stylists.reduce((sum, s) => sum + (s.bookings ?? 0), 0);
+
+  if (error) return <ErrorBanner message={error} />;
+
+  return (
+    <div style={{ animation: "fadeUp 0.4s ease" }}>
+
+      {/* Header action */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 28 }}>
+        <PrimaryBtn icon="person_add" onClick={() => setShowAdd(true)}>Add Stylist</PrimaryBtn>
+      </div>
+
+      {/* KPI strip */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 36 }}>
+        {[
+          { icon: "content_cut",  label: "Total Stylists",  value: stylists.length },
+          { icon: "check_circle", label: "Active",          value: active },
+          { icon: "receipt",      label: "Total Bookings",  value: totalBook },
+          { icon: "payments",     label: "Team Revenue",    value: `$${totalRev.toLocaleString()}` },
+        ].map(k => (
+          <div key={k.label} className="card" style={{ padding: "20px 24px", display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 42, height: 42, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon name={k.icon} size={20} style={{ color: C.primary }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontFamily: "Geist", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant }}>{k.label}</div>
+              <div style={{ fontFamily: "Geist", fontSize: 22, fontWeight: 700, color: C.primary, marginTop: 3 }}>{k.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+        {filters.map(f => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding: "7px 18px", borderRadius: 999,
+            background: filter === f ? C.primary : "transparent",
+            color: filter === f ? "#fff" : C.onSurfaceVariant,
+            border: `1px solid ${filter === f ? C.primary : C.outlineVariant}`,
+            fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
+            transition: "all 0.15s",
+          }}>{f}</button>
+        ))}
+      </div>
+
+      {/* Cards grid */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 80, color: C.onSurfaceVariant, fontFamily: "Geist" }}>Loading stylists…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 80 }}>
+          <Icon name="content_cut" size={40} style={{ color: C.outlineVariant, marginBottom: 16 }} />
+          <p style={{ fontFamily: "Geist", fontSize: 15, color: C.onSurfaceVariant }}>No stylists found</p>
+          <p style={{ fontSize: 13, color: C.outlineVariant, marginTop: 6 }}>Add your first stylist to get started</p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: isMobile ? 16 : 24 }}>
+          {filtered.map(s => (
+            <StylistCard key={s.id} stylist={s} onEdit={setEditTarget} onDelete={setDelTarget} />
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showAdd    && <AddStylistModal    onClose={() => setShowAdd(false)} />}
+      {editTarget && <EditStylistModal   stylist={editTarget} onClose={() => setEditTarget(null)} />}
+      {delTarget  && <DeleteStylistModal stylist={delTarget}  onClose={() => setDelTarget(null)} />}
+    </div>
+  );
+};
+
+export default StylistsPage;

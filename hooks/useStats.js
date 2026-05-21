@@ -1,0 +1,193 @@
+import { useMemo } from "react";
+import { useTransactions, useStylists, useClients } from "./useFirestore";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   useStats — derives all live KPIs, chart data, and breakdowns from Firestore.
+   Consumed by both DashboardPage and ReportsPage.
+───────────────────────────────────────────────────────────────────────────── */
+export const useStats = () => {
+  const { data: transactions, loading: txLoading } = useTransactions();
+  const { data: stylists,     loading: stLoading  } = useStylists();
+  const { data: clients,      loading: clLoading  } = useClients();
+
+  const loading = txLoading || stLoading || clLoading;
+
+  const stats = useMemo(() => {
+    if (!transactions.length) {
+      const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+      const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const now    = new Date();
+      const currentMonth = now.getMonth();
+      const revenueData  = Array.from({ length: 6 }, (_, i) => {
+        const mIdx = (currentMonth - 5 + i + 12) % 12;
+        return { month: MONTHS[mIdx], revenue: 0, target: 20000 };
+      });
+      const salesData        = DAYS.map(day => ({ day, sales: 0 }));
+      const monthlyGrowth    = revenueData.map(d => ({ month: d.month, growth: 0 }));
+      return {
+        totalRevenue: 0, dailyRevenue: 0, weeklySales: 0,
+        avgTicket: 0, refundRate: 0, refundCount: 0,
+        txCount: 0, clientCount: clients.length,
+        revenueData, salesData, monthlyGrowth,
+        serviceBreakdown: [], barberPerf: [], topBarbers: [],
+        transactions: [], completed: [],
+      };
+    }
+
+    const completed = transactions.filter(t => t.status === "Completed");
+    const refunded  = transactions.filter(t => t.status === "Refunded");
+
+    /* ── Helper: parse "$85" → 85 ────────────────────────────────────────── */
+    const toNum = v => parseFloat(String(v ?? "0").replace(/[$,]/g, "")) || 0;
+
+    /* ── Totals ───────────────────────────────────────────────────────────── */
+    const totalRevenue = completed.reduce((s, t) => s + toNum(t.amount), 0);
+    const avgTicket    = completed.length ? totalRevenue / completed.length : 0;
+    const refundRate   = transactions.length
+      ? ((refunded.length / transactions.length) * 100).toFixed(0)
+      : 0;
+
+    /* ── Today / this week ────────────────────────────────────────────────── */
+    const now        = new Date();
+    const todayStr   = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const dayOfWeek  = now.getDay(); // 0 = Sun
+    const weekStart  = new Date(now);
+    weekStart.setDate(now.getDate() - dayOfWeek);
+    weekStart.setHours(0, 0, 0, 0);
+
+    // Try to match "Oct 14, 3:22 PM" style dates stored in Firestore
+    const parseDate = str => {
+      if (!str) return null;
+      // If Firestore Timestamp
+      if (str?.toDate) return str.toDate();
+      const d = new Date(str);
+      return isNaN(d) ? null : d;
+    };
+
+    const dailyRevenue = completed
+      .filter(t => {
+        const d = parseDate(t.date);
+        if (!d) return String(t.date ?? "").startsWith(todayStr);
+        return d.toDateString() === now.toDateString();
+      })
+      .reduce((s, t) => s + toNum(t.amount), 0);
+
+    const weeklySales = completed
+      .filter(t => {
+        const d = parseDate(t.date);
+        if (!d) return true; // include if unparseable — better than excluding
+        return d >= weekStart;
+      })
+      .reduce((s, t) => s + toNum(t.amount), 0);
+
+    /* ── Revenue by month (for charts) ───────────────────────────────────── */
+    const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    const byMonth = {};
+    completed.forEach(t => {
+      const d = parseDate(t.date);
+      const key = d ? MONTHS[d.getMonth()] : null;
+      if (!key) return;
+      byMonth[key] = (byMonth[key] ?? 0) + toNum(t.amount);
+    });
+
+    // Build last 6 months in order
+    const currentMonth = now.getMonth();
+    const revenueData = Array.from({ length: 6 }, (_, i) => {
+      const mIdx  = (currentMonth - 5 + i + 12) % 12;
+      const month = MONTHS[mIdx];
+      return {
+        month,
+        revenue: byMonth[month] ?? 0,
+        target:  Math.round((byMonth[month] ?? 0) * 0.85) || 20000, // 85% of actual as target fallback
+      };
+    });
+
+    /* ── Daily sales this week ────────────────────────────────────────────── */
+    const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const byDay = {};
+    completed.forEach(t => {
+      const d = parseDate(t.date);
+      if (!d || d < weekStart) return;
+      const key = DAYS[d.getDay()];
+      byDay[key] = (byDay[key] ?? 0) + toNum(t.amount);
+    });
+    const salesData = DAYS.map(day => ({ day, sales: byDay[day] ?? 0 }));
+
+    /* ── Service breakdown ────────────────────────────────────────────────── */
+    const bySvc = {};
+    completed.forEach(t => {
+      const svc = t.service ?? "Other";
+      bySvc[svc] = (bySvc[svc] ?? 0) + 1;
+    });
+    const total = completed.length || 1;
+    const COLORS = ["#000000","#735c00","#c4c7c7","#eae7e7","#444748"];
+    const serviceBreakdown = Object.entries(bySvc)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count], i) => ({
+        name,
+        value: Math.round((count / total) * 100),
+        color: COLORS[i] ?? COLORS[0],
+      }));
+
+    /* ── Barber performance ───────────────────────────────────────────────── */
+    const byBarber = {};
+    completed.forEach(t => {
+      const b = t.barber ?? "Unknown";
+      if (!byBarber[b]) byBarber[b] = { revenue: 0, clients: 0 };
+      byBarber[b].revenue += toNum(t.amount);
+      byBarber[b].clients += 1;
+    });
+    const barberPerf = Object.entries(byBarber).map(([name, d]) => ({
+      barber:    name,
+      revenue:   d.revenue,
+      clients:   d.clients,
+      avgTicket: d.clients ? Math.round(d.revenue / d.clients) : 0,
+    })).sort((a, b) => b.revenue - a.revenue);
+
+    /* ── Top barbers (for Dashboard cards) ───────────────────────────────── */
+    const topBarbers = stylists
+      .map(s => {
+        const perf = byBarber[s.name] ?? { revenue: 0, clients: 0 };
+        return {
+          ...s,
+          revenue:  `$${perf.revenue.toLocaleString()}`,
+          bookings: perf.clients,
+          tier:     perf.revenue >= 10000 ? "Top Tier" : perf.revenue >= 5000 ? "Steady" : "Rising",
+        };
+      })
+      .sort((a, b) => toNum(b.revenue) - toNum(a.revenue))
+      .slice(0, 3);
+
+    /* ── Month-on-month growth ────────────────────────────────────────────── */
+    const monthlyGrowth = revenueData.map((d, i, arr) => ({
+      month:  d.month,
+      growth: i === 0 ? 0 : arr[i - 1].revenue === 0 ? 0
+        : parseFloat((((d.revenue - arr[i - 1].revenue) / arr[i - 1].revenue) * 100).toFixed(1)),
+    }));
+
+    return {
+      // KPIs
+      totalRevenue,
+      dailyRevenue,
+      weeklySales,
+      avgTicket:        Math.round(avgTicket),
+      refundRate,
+      refundCount:      refunded.length,
+      txCount:          transactions.length,
+      clientCount:      clients.length,
+      // Charts
+      revenueData,
+      salesData,
+      monthlyGrowth,
+      serviceBreakdown,
+      barberPerf,
+      topBarbers,
+      // Raw
+      transactions,
+      completed,
+    };
+  }, [transactions, stylists, clients]);
+
+  return { stats, loading };
+};
