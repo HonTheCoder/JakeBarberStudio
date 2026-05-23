@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { C } from "../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../components/ui";
 import useIsMobile from "../hooks/useIsMobile";
@@ -8,6 +8,8 @@ import {
   deleteClientsByFilter, useClients,
   addStylist, updateStylist, deleteStylist,
 } from "../hooks/useFirestore";
+import { requestNotifPermission, getNotifPermission } from "../hooks/useNotification";
+import { useTOTPStatus, startTOTPEnrollment, finishTOTPEnrollment, unenrollTOTP } from "../hooks/useTOTP";
 
 // Firebase — used only for account creation
 import { initializeApp, getApps } from "firebase/app";
@@ -609,13 +611,14 @@ const ClientCleanupModal = ({ onClose }) => {
 
 /* ── Default shop settings ───────────────────────────────────────────────── */
 const DEFAULT_SHOP = {
-  name:     "The Parlour",
-  tagline:  "Premium Grooming Lounge",
-  email:    "admin@theparlour.com",
-  phone:    "+1 (555) 800-0001",
-  address:  "128 Meridian Ave, Suite 4, New York, NY 10001",
-  currency: "PHP",
-  timezone: "Asia/Manila",
+  name:          "The Parlour",
+  tagline:       "Premium Grooming Lounge",
+  email:         "admin@theparlour.com",
+  phone:         "+1 (555) 800-0001",
+  address:       "128 Meridian Ave, Suite 4, New York, NY 10001",
+  currency:      "PHP",
+  timezone:      "Asia/Manila",
+  monthlyTarget: "20000",
 };
 
 const DEFAULT_NOTIFS = {
@@ -626,13 +629,268 @@ const DEFAULT_NOTIFS = {
 };
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
+/* ── TOTP Setup Modal ────────────────────────────────────────────────────── */
+/**
+ * Guides the admin through:
+ *  1. Enter current password (Firebase re-auth requirement)
+ *  2. Scan QR code with authenticator app
+ *  3. Verify the 6-digit code
+ */
+const TOTPSetupModal = ({ onClose }) => {
+  const [step,     setStep]     = useState("password"); // "password" | "qr" | "verify" | "done"
+  const [password, setPassword] = useState("");
+  const [code,     setCode]     = useState("");
+  const [secret,   setSecret]   = useState(null);
+  const [qrUri,    setQrUri]    = useState("");
+  const [busy,     setBusy]     = useState(false);
+  const [err,      setErr]      = useState("");
+
+  // Step 1 — re-auth + generate secret
+  const handlePassword = async () => {
+    if (!password) { setErr("Enter your current password to continue."); return; }
+    setBusy(true); setErr("");
+    try {
+      const result = await startTOTPEnrollment(password);
+      setSecret(result.secret);
+      setQrUri(result.qrUri);
+      setStep("qr");
+    } catch (e) {
+      const msgs = {
+        "auth/wrong-password":        "Incorrect password.",
+        "auth/invalid-credential":    "Incorrect password.",
+        "auth/too-many-requests":     "Too many attempts. Wait a moment.",
+        "auth/requires-recent-login": "Session expired — log out and back in first.",
+      };
+      setErr(msgs[e.code] || e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 3 — verify code
+  const handleVerify = async () => {
+    const trimmed = code.replace(/\s/g, "");
+    if (!/^\d{6}$/.test(trimmed)) { setErr("Enter the 6-digit code from your app."); return; }
+    setBusy(true); setErr("");
+    try {
+      await finishTOTPEnrollment(secret, trimmed);
+      setStep("done");
+    } catch (e) {
+      const msgs = {
+        "auth/invalid-verification-code": "Incorrect code — check your app and try again.",
+        "auth/code-expired":              "Code expired. Wait for a new one.",
+      };
+      setErr(msgs[e.code] || e.message);
+      setCode("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "10px 14px",
+    background: C.surfaceLow,
+    border: `1px solid ${C.outlineVariant}40`,
+    borderRadius: 10,
+    fontFamily: "Inter", fontSize: 14, color: C.onSurface,
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="security" size={20} style={{ color: C.primary }} />
+            </div>
+            <div>
+              <h2 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 500, color: C.primary }}>Set Up 2FA</h2>
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>
+                {step === "password" ? "Step 1 of 3 — Verify identity" :
+                 step === "qr"       ? "Step 2 of 3 — Scan QR code" :
+                 step === "verify"   ? "Step 3 of 3 — Confirm code" : "Done"}
+              </p>
+            </div>
+          </div>
+          {step !== "done" && (
+            <button onClick={onClose} style={{ padding: 6, borderRadius: 8 }}
+              onMouseOver={e => (e.currentTarget.style.background = C.surfaceLow)}
+              onMouseOut={e => (e.currentTarget.style.background = "transparent")}>
+              <Icon name="close" size={20} style={{ color: C.onSurfaceVariant }} />
+            </button>
+          )}
+        </div>
+
+        {/* Step 1 — password */}
+        {step === "password" && (
+          <>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 20, lineHeight: 1.6 }}>
+              Enter your current password to verify your identity before enabling two-factor authentication.
+            </p>
+            <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 8 }}>Current Password</label>
+            <input style={inputStyle} type="password" placeholder="Your current password" value={password}
+              onChange={e => { setPassword(e.target.value); setErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handlePassword()} autoFocus />
+            {err && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginTop: 12 }}>
+                <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: C.error }}>{err}</span>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+              <SecondaryBtn onClick={onClose} disabled={busy}>Cancel</SecondaryBtn>
+              <PrimaryBtn onClick={handlePassword} icon={busy ? "hourglass_empty" : "arrow_forward"} disabled={busy}>
+                {busy ? "Verifying…" : "Continue"}
+              </PrimaryBtn>
+            </div>
+          </>
+        )}
+
+        {/* Step 2 — QR code */}
+        {step === "qr" && (
+          <>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 20, lineHeight: 1.6 }}>
+              Scan this QR code with <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP app.
+              Then click <em>Next</em> to enter the confirmation code.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+              {/* Use Google Charts API to render QR — no extra dependency */}
+              <img
+                src={`https://chart.googleapis.com/chart?cht=qr&chs=220x220&chl=${encodeURIComponent(qrUri)}&choe=UTF-8`}
+                alt="TOTP QR code"
+                width={220} height={220}
+                style={{ borderRadius: 12, background: "#fff", padding: 8 }}
+              />
+            </div>
+            <p style={{ fontSize: 11, color: C.onSurfaceVariant, textAlign: "center", marginBottom: 20 }}>
+              Can't scan? Open your authenticator app and enter the code manually.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <SecondaryBtn onClick={() => setStep("password")}>Back</SecondaryBtn>
+              <PrimaryBtn onClick={() => setStep("verify")} icon="arrow_forward">Next</PrimaryBtn>
+            </div>
+          </>
+        )}
+
+        {/* Step 3 — verify code */}
+        {step === "verify" && (
+          <>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 20, lineHeight: 1.6 }}>
+              Enter the 6-digit code currently shown in your authenticator app to confirm setup.
+            </p>
+            <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 8 }}>Verification Code</label>
+            <input
+              style={{ ...inputStyle, fontSize: 22, letterSpacing: "0.3em", textAlign: "center" }}
+              type="text" inputMode="numeric" maxLength={6} placeholder="000000" value={code}
+              onChange={e => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleVerify()} autoFocus />
+            {err && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginTop: 12 }}>
+                <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: C.error }}>{err}</span>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+              <SecondaryBtn onClick={() => { setCode(""); setErr(""); setStep("qr"); }} disabled={busy}>Back</SecondaryBtn>
+              <PrimaryBtn onClick={handleVerify} icon={busy ? "hourglass_empty" : "check"} disabled={busy || code.length < 6}>
+                {busy ? "Verifying…" : "Enable 2FA"}
+              </PrimaryBtn>
+            </div>
+          </>
+        )}
+
+        {/* Done */}
+        {step === "done" && (
+          <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="verified_user" size={28} style={{ color: "#166534" }} />
+            </div>
+            <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>2FA is now active</p>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24, lineHeight: 1.6 }}>
+              From now on you'll need a code from your authenticator app each time you sign in.
+            </p>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+              Done
+            </button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+/* ── TOTP Remove Modal ───────────────────────────────────────────────────── */
+const TOTPRemoveModal = ({ onClose }) => {
+  const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState("");
+  const [done, setDone] = useState(false);
+
+  const handleRemove = async () => {
+    setBusy(true); setErr("");
+    try {
+      await unenrollTOTP();
+      setDone(true);
+    } catch (e) {
+      setErr(e.message || "Failed to remove 2FA. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
+        {done ? (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 48, height: 48, background: C.surfaceLow, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="lock_open" size={24} style={{ color: C.onSurfaceVariant }} />
+            </div>
+            <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>2FA removed</p>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24 }}>Two-factor authentication has been disabled for this account.</p>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>Close</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+              <Icon name="no_encryption" size={24} style={{ color: C.error }} />
+            </div>
+            <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>Remove Two-Factor Authentication?</h3>
+            <p style={{ fontSize: 14, color: C.onSurfaceVariant, lineHeight: 1.6, marginBottom: 8 }}>
+              This will remove the authenticator app requirement from your account. You'll only need your password to sign in.
+            </p>
+            {err && <p style={{ color: C.error, fontSize: 13, marginBottom: 8 }}>{err}</p>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+              <SecondaryBtn onClick={onClose} disabled={busy}>Cancel</SecondaryBtn>
+              <button onClick={handleRemove} disabled={busy}
+                style={{ padding: "10px 20px", borderRadius: 12, background: busy ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}>
+                {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
+                {busy ? "Removing…" : "Remove 2FA"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
 const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   const isMobile = useIsMobile();
   const { settings, loading: settingsLoading } = useSettings();
 
+  // Stable refs so the hydrate useEffect doesn't need these in its dep array
+  const onDarkModeChangeRef   = useRef(onDarkModeChange);
+  const onCompactNavChangeRef = useRef(onCompactNavChange);
+  useEffect(() => { onDarkModeChangeRef.current   = onDarkModeChange;   }, [onDarkModeChange]);
+  useEffect(() => { onCompactNavChangeRef.current = onCompactNavChange; }, [onCompactNavChange]);
+
   const [shop,      setShop]      = useState(DEFAULT_SHOP);
   const [notifs,    setNotifs]    = useState(DEFAULT_NOTIFS);
-  const [twoFactor, setTwoFactor] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState("30");
   const [darkMode,   setDarkMode]   = useState(false);
   const [compactNav, setCompactNav] = useState(false);
@@ -672,11 +930,9 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     if (!settings) return;
     if (settings.shop)           setShop(s          => ({ ...s, ...settings.shop, currency: "PHP", timezone: "Asia/Manila" }));
     if (settings.notifs)         setNotifs(n        => ({ ...n,          ...settings.notifs }));
-    if (settings.twoFactor     != null) setTwoFactor(settings.twoFactor);
     if (settings.sessionTimeout != null) setSessionTimeout(settings.sessionTimeout);
-    if (settings.darkMode      != null) { setDarkMode(settings.darkMode);   onDarkModeChange?.(settings.darkMode); }
-    if (settings.compactNav    != null) { setCompactNav(settings.compactNav); onCompactNavChange?.(settings.compactNav); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (settings.darkMode      != null) { setDarkMode(settings.darkMode);   onDarkModeChangeRef.current?.(settings.darkMode); }
+    if (settings.compactNav    != null) { setCompactNav(settings.compactNav); onCompactNavChangeRef.current?.(settings.compactNav); }
   }, [settings]);
 
   const [savedSnapshot, setSavedSnapshot] = useState(null);
@@ -685,7 +941,6 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     if (!savedSnapshot) return;
     setShop(savedSnapshot.shop);
     setNotifs(savedSnapshot.notifs);
-    setTwoFactor(savedSnapshot.twoFactor);
     setSessionTimeout(savedSnapshot.sessionTimeout);
     const dm = savedSnapshot.darkMode;
     const cn = savedSnapshot.compactNav;
@@ -694,7 +949,6 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   };
 
   const setShopField = useCallback((k) => (e) => setShop(s => ({ ...s, [k]: e.target.value })), []);
-  const toggleNotif  = useCallback((k) => () => setNotifs(n => ({ ...n, [k]: !n[k] })), []);
 
   const handleDarkToggle = () => {
     const next = !darkMode;
@@ -708,10 +962,25 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     onCompactNavChange?.(next);
   };
 
+  // ── Browser notification permission ────────────────────────────────────
+  const [notifPermission, setNotifPermission] = useState(getNotifPermission());
+
+  // When any notification toggle is turned ON, request browser permission
+  const toggleNotif = useCallback((k) => async () => {
+    setNotifs(n => {
+      const next = { ...n, [k]: !n[k] };
+      // If turning ON, request permission immediately
+      if (next[k]) {
+        requestNotifPermission().then(result => setNotifPermission(result));
+      }
+      return next;
+    });
+  }, []);
+
   const [saveState, setSaveState] = useState("idle");
   const handleSave = async () => {
     setSaveState("saving");
-    const payload = { shop: { ...shop, currency: "PHP", timezone: "Asia/Manila" }, notifs, twoFactor, sessionTimeout, darkMode, compactNav };
+    const payload = { shop: { ...shop, currency: "PHP", timezone: "Asia/Manila" }, notifs, sessionTimeout, darkMode, compactNav };
     try {
       await saveSettings(payload);
       setSavedSnapshot(payload);
@@ -723,9 +992,13 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     }
   };
 
+  const { enrolled: totpEnrolled, loading: totpLoading } = useTOTPStatus();
+
   const [editingStaff,      setEditingStaff]      = useState(null);
   const [showCreate,        setShowCreate]        = useState(false);
   const [showClientCleanup, setShowClientCleanup] = useState(false);
+  const [showTOTPSetup,     setShowTOTPSetup]     = useState(false);
+  const [showTOTPRemove,    setShowTOTPRemove]    = useState(false);
   const [confirm,           setConfirm]           = useState(null);
 
   const handleStaffSave = async (updated) => {
@@ -808,6 +1081,9 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
         <Row icon="location_on" label="Address">
           <FieldInput value={shop.address} onChange={setShopField("address")} placeholder="Street, City, State" />
         </Row>
+        <Row icon="track_changes" label="Monthly Revenue Target" subtitle="Used as the target line in the Revenue Trend chart">
+          <FieldInput value={shop.monthlyTarget} onChange={setShopField("monthlyTarget")} placeholder="e.g. 20000" type="number" />
+        </Row>
         <Row icon="language" label="Timezone" subtitle="Fixed to Philippine Standard Time">
           <div style={{ padding: "9px 14px", background: C.surfaceLow, border: `1px solid ${C.outlineVariant}40`, borderRadius: 10, fontFamily: "Inter", fontSize: 13, color: C.onSurfaceVariant, display: "flex", alignItems: "center", gap: 8, userSelect: "none" }}>
             <span style={{ color: C.onSurface, fontWeight: 500 }}>Asia/Manila</span>
@@ -839,7 +1115,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
               key={s.id ?? s.email}
               icon="person"
               label={s.name}
-              subtitle={`${s.role} · ${s.email}`}
+              subtitle={[s.role, s.email, s.phone].filter(Boolean).join(" · ")}
               last={i === staff.length - 1}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -882,25 +1158,85 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       </Section>
 
       {/* ── Notifications ────────────────────────────────────────────── */}
-      <Section title="Notifications" subtitle="Choose what alerts you receive.">
-        <Row icon="warning" label="Low Stock Alerts" subtitle="Notify when inventory drops below threshold">
+      <Section title="Notifications" subtitle="Choose what alerts you receive. Alerts are sent as browser notifications.">
+        {/* Permission status banner */}
+        {notifPermission === "denied" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", background: "#fef2f2", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+            <Icon name="notifications_off" size={18} style={{ color: C.error, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.error }}>Browser notifications blocked</p>
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>Open your browser's site settings and allow notifications for this site.</p>
+            </div>
+          </div>
+        )}
+        {notifPermission === "default" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", background: `${C.secondary}14`, borderBottom: `1px solid ${C.outlineVariant}20` }}>
+            <Icon name="notifications_active" size={18} style={{ color: C.secondary, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 500, color: C.primary }}>Browser permission required</p>
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>Enable a toggle below — your browser will ask for permission.</p>
+            </div>
+            <button
+              onClick={() => requestNotifPermission().then(r => setNotifPermission(r))}
+              style={{ padding: "8px 16px", borderRadius: 10, background: C.secondary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+            >
+              Allow
+            </button>
+          </div>
+        )}
+        {notifPermission === "granted" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", background: "#f0fdf4", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+            <Icon name="check_circle" size={16} style={{ color: "#166534", flexShrink: 0 }} />
+            <p style={{ fontSize: 12, fontFamily: "Geist", color: "#166534", fontWeight: 500 }}>Browser notifications are active</p>
+          </div>
+        )}
+        <Row icon="warning" label="Low Stock Alerts" subtitle="Fires when any item drops to ≤ 5 units">
           <Toggle on={notifs.lowStock} onToggle={toggleNotif("lowStock")} />
         </Row>
-        <Row icon="receipt" label="New Sale" subtitle="Alert for every completed transaction">
+        <Row icon="receipt" label="New Sale" subtitle="Fires on every completed transaction">
           <Toggle on={notifs.newSale} onToggle={toggleNotif("newSale")} />
         </Row>
-        <Row icon="today" label="Daily Summary" subtitle="End-of-day revenue and booking recap">
+        <Row icon="today" label="Daily Summary" subtitle="Fires once per day with revenue total">
           <Toggle on={notifs.dailySummary} onToggle={toggleNotif("dailySummary")} />
         </Row>
-        <Row icon="date_range" label="Weekly Report" subtitle="Sent every Monday morning" last>
+        <Row icon="date_range" label="Weekly Report" subtitle="Fires once per week with sales summary" last>
           <Toggle on={notifs.weeklySummary} onToggle={toggleNotif("weeklySummary")} />
         </Row>
       </Section>
 
       {/* ── Security ─────────────────────────────────────────────────── */}
       <Section title="Security" subtitle="Control access and authentication settings.">
-        <Row icon="lock" label="Two-Factor Authentication" subtitle={twoFactor ? "Enabled — via authenticator app" : "Add an extra layer of login security"}>
-          <Toggle on={twoFactor} onToggle={() => setTwoFactor(v => !v)} />
+        <Row
+          icon="lock"
+          label="Two-Factor Authentication"
+          subtitle={
+            totpLoading ? "Checking status…"
+            : totpEnrolled ? "Active — authenticator app is set up"
+            : "Add an extra layer of security at login"
+          }
+        >
+          {totpLoading ? (
+            <Icon name="hourglass_empty" size={18} style={{ color: C.onSurfaceVariant }} />
+          ) : totpEnrolled ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ background: "#dcfce7", color: "#166534", padding: "3px 12px", borderRadius: 999, fontSize: 11, fontFamily: "Geist", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Active</span>
+              <button
+                onClick={() => setShowTOTPRemove(true)}
+                style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.error}40`, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.error, letterSpacing: "0.06em" }}
+                onMouseOver={e => (e.currentTarget.style.background = `${C.error}12`)}
+                onMouseOut={e => (e.currentTarget.style.background = "transparent")}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowTOTPSetup(true)}
+              style={{ padding: "8px 16px", borderRadius: 10, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
+            >
+              Set Up
+            </button>
+          )}
         </Row>
         <Row icon="timer" label="Session Timeout" subtitle="Auto-logout after inactivity" last>
           <select
@@ -991,6 +1327,14 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
 
       {showClientCleanup && (
         <ClientCleanupModal onClose={() => setShowClientCleanup(false)} />
+      )}
+
+      {showTOTPSetup && (
+        <TOTPSetupModal onClose={() => setShowTOTPSetup(false)} />
+      )}
+
+      {showTOTPRemove && (
+        <TOTPRemoveModal onClose={() => setShowTOTPRemove(false)} />
       )}
 
       {confirm && (

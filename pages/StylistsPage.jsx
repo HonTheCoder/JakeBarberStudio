@@ -49,8 +49,8 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
     {/* Stats row */}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.outlineVariant}20` }}>
       {[
-        { icon: "receipt",  label: "Bookings", value: stylist.bookings ?? 0 },
-        { icon: "payments", label: "Revenue",  value: stylist.revenue  ?? "$0" },
+        { icon: "receipt",  label: "Sales",   value: stylist.bookings ?? 0 },
+        { icon: "payments", label: "Revenue", value: stylist.revenue  ?? "$0" },
       ].map(s => (
         <div key={s.label} style={{ padding: "16px 24px", borderRight: s.label === "Bookings" ? `1px solid ${C.outlineVariant}20` : "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -109,7 +109,7 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
 const StylistsPage = ({ search = "" }) => {
   const isMobile = useIsMobile();
   const { data: stylists,     loading,  error  } = useStylists();
-  const { data: transactions, loading: txLoading } = useTransactions();
+  const { data: transactions } = useTransactions();
 
   // Aggregate bookings & revenue per barber name from live transactions
   const barberStats = useMemo(() => {
@@ -154,7 +154,6 @@ const StylistsPage = ({ search = "" }) => {
 
   const active    = enriched.filter(s => s.status === "Active").length;
   const totalRev  = enriched.reduce((sum, s) => sum + parseFloat((s.revenue ?? "$0").replace(/[$,]/g, "")), 0);
-  const totalBook = enriched.reduce((sum, s) => sum + (s.bookings ?? 0), 0);
 
   if (error) return <ErrorBanner message={error} />;
 
@@ -184,7 +183,6 @@ const StylistsPage = ({ search = "" }) => {
         {[
           { icon: "content_cut",  label: "Total Stylists",  value: stylists.length },
           { icon: "check_circle", label: "Active",          value: active },
-          { icon: "receipt",      label: "Total Bookings",  value: totalBook },
           { icon: "payments",     label: "Team Revenue",    value: `$${totalRev.toLocaleString()}` },
         ].map(k => (
           <div key={k.label} className="card" style={{ padding: "20px 24px", display: "flex", alignItems: "center", gap: 14 }}>

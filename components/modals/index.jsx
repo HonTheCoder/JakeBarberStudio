@@ -914,7 +914,7 @@ export const AddStylistModal = ({ onClose }) => {
     setSubmitting(true);
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-      await addStylist({ ...form, initials, bookings: 0, revenue: "$0" });
+      await addStylist({ ...form, initials });
       onClose();
     } catch (e) {
       setError(e.message);
@@ -979,8 +979,6 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     email:       stylist.email       ?? "",
     status:      stylist.status      ?? "Active",
     specialties: stylist.specialties ?? [],
-    bookings:    stylist.bookings    ?? 0,
-    revenue:     stylist.revenue     ?? "$0",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1033,14 +1031,6 @@ export const EditStylistModal = ({ stylist, onClose }) => {
         <Field label="Phone">
           <input style={inputStyle} value={form.phone} onChange={set("phone")} />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Bookings">
-            <input style={inputStyle} type="number" min="0" value={form.bookings} onChange={set("bookings")} />
-          </Field>
-          <Field label="Revenue">
-            <input style={inputStyle} placeholder="e.g. $14,200" value={form.revenue} onChange={set("revenue")} />
-          </Field>
-        </div>
         <Field label="Specialties">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {ALL_SERVICES.map(sp => {

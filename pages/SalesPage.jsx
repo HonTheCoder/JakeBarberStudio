@@ -65,6 +65,28 @@ const SalesPage = ({ search = "" }) => {
   const totalRevenue = completed.reduce((s, t) => s + toNum(t.amount), 0);
   const avgTicket    = completed.length ? (totalRevenue / completed.length).toFixed(2) : "0.00";
 
+  // KPI trends: current month vs previous month
+  const now            = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const thisMonthTx = completed.filter(t => { const d = parseDate(t.date); return d && d >= thisMonthStart; });
+  const prevMonthTx = completed.filter(t => { const d = parseDate(t.date); return d && d >= prevMonthStart && d < thisMonthStart; });
+  const thisMonthRev = thisMonthTx.reduce((s, t) => s + toNum(t.amount), 0);
+  const prevMonthRev = prevMonthTx.reduce((s, t) => s + toNum(t.amount), 0);
+  const thisMonthAvg = thisMonthTx.length ? thisMonthRev / thisMonthTx.length : 0;
+  const prevMonthAvg = prevMonthTx.length ? prevMonthRev / prevMonthTx.length : 0;
+
+  const pctChange = (curr, prev) => {
+    if (prev === 0) return curr > 0 ? { label: "New", positive: true } : { label: "--", positive: true };
+    const pct = ((curr - prev) / prev) * 100;
+    return { label: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, positive: pct >= 0 };
+  };
+  const revTrend  = pctChange(thisMonthRev, prevMonthRev);
+  const avgTrend  = pctChange(thisMonthAvg, prevMonthAvg);
+  const completedPct = transactions.length
+    ? `${((completed.length / transactions.length) * 100).toFixed(0)}% completion`
+    : "0% completion";
+
   // Build chart data from live transactions
   const chartData = useMemo(() => {
     const now = new Date();
@@ -106,10 +128,10 @@ const SalesPage = ({ search = "" }) => {
 
       {/* KPI Row */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 40 }}>
-        <KpiCard icon="payments"     label="Total Revenue"  value={fmt(totalRevenue)}    trend="+12.5%" />
-        <KpiCard icon="receipt"      label="Transactions"   value={transactions.length}  trend={`${transactions.length} total`} />
-        <KpiCard icon="check_circle" label="Completed"      value={completed.length}     trend="live" />
-        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={fmt(avgTicket)}       trend="+3.1%" />
+        <KpiCard icon="payments"     label="Total Revenue"  value={fmt(totalRevenue)}   trend={revTrend.label}  trendPositive={revTrend.positive} />
+        <KpiCard icon="receipt"      label="Transactions"   value={transactions.length} trend={`${transactions.length} total`} />
+        <KpiCard icon="check_circle" label="Completed"      value={completed.length}    trend={completedPct} />
+        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={fmt(avgTicket)}      trend={avgTrend.label}  trendPositive={avgTrend.positive} />
       </div>
 
       {/* Sales Chart */}

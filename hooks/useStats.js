@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useTransactions, useStylists, useClients } from "./useFirestore";
+import { useTransactions, useStylists, useClients, useSettings } from "./useFirestore";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    useStats — derives all live KPIs, chart data, and breakdowns from Firestore.
@@ -9,8 +9,11 @@ export const useStats = () => {
   const { data: transactions, loading: txLoading } = useTransactions();
   const { data: stylists,     loading: stLoading  } = useStylists();
   const { data: clients,      loading: clLoading  } = useClients();
+  const { settings }                                 = useSettings();
 
   const loading = txLoading || stLoading || clLoading;
+
+  const monthlyTarget = parseFloat(String(settings?.monthlyTarget ?? "0").replace(/[₱$,]/g, "")) || 20000;
 
   const stats = useMemo(() => {
     if (!transactions.length) {
@@ -20,7 +23,7 @@ export const useStats = () => {
       const currentMonth = now.getMonth();
       const revenueData  = Array.from({ length: 6 }, (_, i) => {
         const mIdx = (currentMonth - 5 + i + 12) % 12;
-        return { month: MONTHS[mIdx], revenue: 0, target: 20000 };
+        return { month: MONTHS[mIdx], revenue: 0, target: monthlyTarget };
       });
       const salesData        = DAYS.map(day => ({ day, sales: 0 }));
       const monthlyGrowth    = revenueData.map(d => ({ month: d.month, growth: 0 }));
@@ -98,7 +101,7 @@ export const useStats = () => {
       return {
         month,
         revenue: byMonth[month] ?? 0,
-        target:  Math.round((byMonth[month] ?? 0) * 0.85) || 20000, // 85% of actual as target fallback
+        target:  monthlyTarget,
       };
     });
 
@@ -168,6 +171,41 @@ export const useStats = () => {
         : parseFloat((((d.revenue - arr[i - 1].revenue) / arr[i - 1].revenue) * 100).toFixed(1)),
     }));
 
+
+    /* -- KPI trends: current vs previous period ----------------------------- */
+    // Month boundaries
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const thisMonthTx = completed.filter(t => { const d = parseDate(t.date); return d && d >= thisMonthStart; });
+    const prevMonthTx = completed.filter(t => { const d = parseDate(t.date); return d && d >= prevMonthStart && d < thisMonthStart; });
+
+    const thisMonthRev = thisMonthTx.reduce((s, t) => s + toNum(t.amount), 0);
+    const prevMonthRev = prevMonthTx.reduce((s, t) => s + toNum(t.amount), 0);
+
+    const thisMonthAvg = thisMonthTx.length ? thisMonthRev / thisMonthTx.length : 0;
+    const prevMonthAvg = prevMonthTx.length ? prevMonthRev / prevMonthTx.length : 0;
+
+    // Week boundaries
+    const prevWeekStart = new Date(weekStart); prevWeekStart.setDate(weekStart.getDate() - 7);
+    const thisWeekTxCount = transactions.filter(t => { const d = parseDate(t.date); return d && d >= weekStart; }).length;
+    const prevWeekTxCount = transactions.filter(t => { const d = parseDate(t.date); return d && d >= prevWeekStart && d < weekStart; }).length;
+
+    // pctChange: returns { label: "+12.5%", positive: true }
+    const pctChange = (curr, prev) => {
+      if (prev === 0) return curr > 0 ? { label: "New", positive: true } : { label: "--", positive: true };
+      const pct = ((curr - prev) / prev) * 100;
+      return { label: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`, positive: pct >= 0 };
+    };
+
+    const revTrend     = pctChange(thisMonthRev, prevMonthRev);
+    const avgTrend     = pctChange(thisMonthAvg, prevMonthAvg);
+    const txDiff       = thisWeekTxCount - prevWeekTxCount;
+    const txTrendLabel = txDiff === 0 ? "same as last week"
+      : txDiff > 0 ? `+${txDiff} vs last week` : `${txDiff} vs last week`;
+    const txTrendPositive = txDiff >= 0;
+    const refundTrend  = { label: `${refunded.length} refund${refunded.length !== 1 ? "s" : ""}`, positive: refunded.length === 0 };
+
     return {
       // KPIs
       totalRevenue,
@@ -178,6 +216,12 @@ export const useStats = () => {
       refundCount:      refunded.length,
       txCount:          transactions.length,
       clientCount:      clients.length,
+      // KPI trends (computed vs prior period)
+      revTrend,
+      avgTrend,
+      txTrendLabel,
+      txTrendPositive,
+      refundTrend,
       // Charts
       revenueData,
       salesData,
@@ -189,7 +233,7 @@ export const useStats = () => {
       transactions,
       completed,
     };
-  }, [transactions, stylists, clients]);
+  }, [transactions, stylists, clients, monthlyTarget]);
 
   return { stats, loading };
 };

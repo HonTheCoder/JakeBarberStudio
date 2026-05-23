@@ -77,7 +77,8 @@ const useOutsideClick = (ref, isOpen, onClose) => {
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [isOpen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, onClose]);
 };
 
 const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, role, onLogout }) => {

@@ -18,12 +18,15 @@ import ReportsPage    from "./pages/ReportsPage";
 import SettingsPage   from "./pages/SettingsPage";
 import ComingSoonPage from "./pages/ComingSoonPage";
 
+import { useSettings }       from "./hooks/useFirestore";
+import { useNotifications }  from "./hooks/useNotification";
+
 const MOBILE_BREAKPOINT = 768;
 
+/** Inner shell — has access to auth context. */
 const Shell = () => {
   const { user, role, logout } = useAuth();
 
-  // Default active page to first item allowed for this role
   const defaultPage = "dashboard";
 
   const [active,     setActive]     = useState(defaultPage);
@@ -35,6 +38,12 @@ const Shell = () => {
 
   // Controlled by SettingsPage
   const [darkMode,   setDarkMode]   = useState(false);
+
+  // Live notification preferences from Firestore
+  const { settings } = useSettings();
+
+  // Wire real browser notifications to Firestore listeners
+  useNotifications(settings?.notifs);
 
   useEffect(() => {
     const handler = () => {
@@ -78,6 +87,7 @@ const Shell = () => {
     const handler = () => setActive("settings");
     window.addEventListener("navigate-settings", handler);
     return () => window.removeEventListener("navigate-settings", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDarkModeChange   = (val) => setDarkMode(val);
@@ -89,7 +99,6 @@ const Shell = () => {
   const mainL = isMobile ? 0 : sideW + 20 + 24;
 
   const renderPage = () => {
-    // Guard: barbers cannot access admin-only pages directly
     const allowed = getNavItems(role).map(i => i.id);
     if (!allowed.includes(active)) return <ComingSoonPage title="Access Denied" />;
 

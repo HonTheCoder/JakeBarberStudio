@@ -148,6 +148,11 @@ const ReportsPage = () => {
     serviceBreakdown = [],
     barberPerf = [],
     transactions = [],
+    revTrend     = { label: "--", positive: true },
+    avgTrend     = { label: "--", positive: true },
+    txTrendLabel = "--",
+    txTrendPositive = true,
+    refundTrend  = { label: "0 refunds", positive: true },
   } = stats ?? {};
 
   return (
@@ -161,10 +166,10 @@ const ReportsPage = () => {
 
       {/* KPI Row */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 40 }}>
-        <KpiCard icon="payments"     label="Total Revenue"  value={fmt(totalRevenue)} trend="+12.5%" />
-        <KpiCard icon="receipt"      label="Transactions"   value={txCount}           trend="+8 this week" />
-        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={fmt(avgTicket)}    trend="+3.1%" />
-        <KpiCard icon="replay"       label="Refund Rate"    value={`${refundRate}%`}  trend={`${refundCount} refunds`} trendPositive={false} />
+        <KpiCard icon="payments"     label="Total Revenue"  value={fmt(totalRevenue)} trend={revTrend.label}    trendPositive={revTrend.positive} />
+        <KpiCard icon="receipt"      label="Transactions"   value={txCount}           trend={txTrendLabel}     trendPositive={txTrendPositive} />
+        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={fmt(avgTicket)}    trend={avgTrend.label}   trendPositive={avgTrend.positive} />
+        <KpiCard icon="replay"       label="Refund Rate"    value={`${refundRate}%`}  trend={refundTrend.label} trendPositive={refundTrend.positive} />
       </div>
 
       {/* Revenue Trend + MoM Growth */}
