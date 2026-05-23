@@ -55,6 +55,6 @@ export const pageMeta = {
   clients:    { title: "Clients",    subtitle: "Your client records and history"                    },
   inventory:  { title: "Inventory",  subtitle: "Curate and monitor your premium grooming supplies"  },
   sales:      { title: "Sales",      subtitle: "Track revenue and transactions"                     },
-  reports:    { title: "Reports",    subtitle: "Fiscal Year 2024 Performance Overview"              },
+  reports:    { title: "Reports",    get subtitle() { return `Fiscal Year ${new Date().getFullYear()} Performance Overview`; } },
   settings:   { title: "Settings",   subtitle: "System configuration"                              },
 };

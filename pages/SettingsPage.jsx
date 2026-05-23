@@ -6,12 +6,13 @@ import {
   useSettings, saveSettings,
   clearAllTransactions, resetInventoryStock,
   deleteClientsByFilter, useClients,
+  addStylist, updateStylist, deleteStylist,
 } from "../hooks/useFirestore";
 
 // Firebase — used only for account creation
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { db, auth as primaryAuth } from "../firebase";
 
 /* ── Shared primitives ───────────────────────────────────────────────────── */
@@ -141,16 +142,20 @@ const staffInputStyle = {
 };
 
 const StaffEditModal = ({ member, onClose, onSave }) => {
-  const [form, setForm] = useState({ name: member.name, role: member.role, email: member.email, status: member.status });
+  const [form, setForm] = useState({ name: member.name, role: member.role, email: member.email, phone: member.phone ?? "", status: member.status });
   const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState("");
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handle = async () => {
     setBusy(true);
+    setErr("");
     try {
       await onSave({ ...member, ...form });
       onClose();
+    } catch (e) {
+      setErr(e.message || "Failed to save. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -180,6 +185,10 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
           <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Email</label>
           <input style={staffInputStyle} type="email" value={form.email} onChange={set("email")} />
         </div>
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Phone Number</label>
+          <input style={staffInputStyle} type="tel" placeholder="+1 (555) 000-0000" value={form.phone} onChange={set("phone")} />
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
           <div>
             <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Role</label>
@@ -194,9 +203,15 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
             </select>
           </div>
         </div>
+        {err && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginBottom: 8 }}>
+            <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: C.error }}>{err}</span>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10, marginTop: 8, justifyContent: "flex-end" }}>
           <SecondaryBtn onClick={onClose}>Cancel</SecondaryBtn>
-          <PrimaryBtn onClick={handle} icon={busy ? "hourglass_empty" : "check"}>{busy ? "Saving…" : "Save"}</PrimaryBtn>
+          <PrimaryBtn onClick={handle} icon={busy ? "hourglass_empty" : "check"} disabled={busy}>{busy ? "Saving…" : "Save"}</PrimaryBtn>
         </div>
       </div>
     </div>
@@ -255,6 +270,22 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
         createdAt: new Date().toISOString(),
       });
 
+      // Auto-create a stylist card whenever a barber account is created
+      if (form.appRole === "barber") {
+        const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+        await addStylist({
+          uid,
+          name:        form.name.trim(),
+          email:       form.email.trim().toLowerCase(),
+          role:        form.jobTitle,
+          status:      "Active",
+          specialties: [],
+          bookings:    0,
+          revenue:     "$0",
+          initials,
+        });
+      }
+
       onCreated?.({ uid, name: form.name.trim(), email: form.email.trim(), role: form.appRole, jobTitle: form.jobTitle, status: "Active" });
       setDone(true);
     } catch (e) {
@@ -293,25 +324,33 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
 
         {done ? (
           /* ── Success ── */
-          <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
-            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
-            </div>
-            <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 6 }}>Account created!</p>
-            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 8 }}>
-              <strong>{form.name}</strong> can now log in with <strong>{form.email}</strong>
-            </p>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", background: form.appRole === "admin" ? C.secondaryContainer : C.surfaceHigh, borderRadius: 999, marginBottom: 24 }}>
-              <Icon name="verified_user" size={14} style={{ color: form.appRole === "admin" ? C.secondary : C.onSurfaceVariant }} />
-              <span style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: form.appRole === "admin" ? C.secondary : C.onSurfaceVariant }}>
-                {form.appRole} access
-              </span>
-            </div>
-            <br />
-            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
-              Done
-            </button>
-          </div>
+          (() => {
+            const isAdmin    = form.appRole === "admin";
+            const badgeBg    = isAdmin ? C.secondaryContainer : C.surfaceHigh;
+            const badgeColor = isAdmin ? C.secondary : C.onSurfaceVariant;
+            const roleLabel  = isAdmin ? "Admin" : form.jobTitle || "Barber";
+            return (
+              <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
+                <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+                </div>
+                <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 6 }}>Account created!</p>
+                <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 8 }}>
+                  <strong>{form.name}</strong> can now log in with <strong>{form.email}</strong>
+                </p>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", background: badgeBg, borderRadius: 999, marginBottom: 24 }}>
+                  <Icon name="verified_user" size={14} style={{ color: badgeColor }} />
+                  <span style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: badgeColor }}>
+                    {roleLabel} access
+                  </span>
+                </div>
+                <br />
+                <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+                  Done
+                </button>
+              </div>
+            );
+          })()
         ) : (
           <>
             {/* App Role selector — most important field, shown first */}
@@ -322,7 +361,6 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
               <div style={{ display: "flex", gap: 10 }}>
                 {[
                   { value: "barber", label: "Barber", icon: "content_cut", desc: "Schedule & clients only" },
-                  { value: "admin",  label: "Admin",  icon: "admin_panel_settings", desc: "Full access" },
                 ].map(opt => {
                   const sel = form.appRole === opt.value;
                   return (
@@ -613,6 +651,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
             id:       d.id,
             name:     d.data().name     ?? "Unknown",
             email:    d.data().email    ?? "",
+            phone:    d.data().phone    ?? "",
             role:     d.data().role === "admin" ? "Administrator" : (d.data().jobTitle ?? "Barber"),
             appRole:  d.data().role     ?? "barber",
             status:   d.data().status   ?? "Active",
@@ -689,7 +728,29 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   const [showClientCleanup, setShowClientCleanup] = useState(false);
   const [confirm,           setConfirm]           = useState(null);
 
-  const handleStaffSave = updated => {
+  const handleStaffSave = async (updated) => {
+    // Persist to Firestore users/{uid}
+    await updateDoc(doc(db, "users", updated.id), {
+      name:     updated.name,
+      email:    updated.email,
+      phone:    updated.phone ?? "",
+      jobTitle: updated.role,
+      status:   updated.status,
+    });
+    // Also sync the matching stylist card (matched by uid field)
+    const stylistSnap = await getDocs(query(collection(db, "stylists"), where("uid", "==", updated.id)));
+    if (!stylistSnap.empty) {
+      const initials = updated.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+      await Promise.all(stylistSnap.docs.map(d => updateStylist(d.id, {
+        name:    updated.name,
+        email:   updated.email,
+        phone:   updated.phone ?? "",
+        role:    updated.role,
+        status:  updated.status,
+        initials,
+      })));
+    }
+    // Update local state only after Firestore confirms
     setStaff(prev => prev.map(m => m.id === updated.id ? updated : m));
   };
 
@@ -698,10 +759,24 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       id:      newAccount.uid,
       name:    newAccount.name,
       email:   newAccount.email,
+      phone:   newAccount.phone ?? "",
       role:    newAccount.role === "admin" ? "Administrator" : (newAccount.jobTitle ?? "Barber"),
       appRole: newAccount.role,
       status:  "Active",
     }]);
+  };
+
+  const handleStaffDelete = async (member) => {
+    try {
+      await deleteDoc(doc(db, "users", member.id));
+      const stylistSnap = await getDocs(query(collection(db, "stylists"), where("uid", "==", member.id)));
+      if (!stylistSnap.empty) {
+        await Promise.all(stylistSnap.docs.map(d => deleteStylist(d.id)));
+      }
+      setStaff(prev => prev.filter(m => m.id !== member.id));
+    } catch (e) {
+      console.error("Failed to delete staff member:", e);
+    }
   };
 
   if (settingsLoading) {
@@ -781,6 +856,22 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
                 >
                   Edit
                 </button>
+                {s.appRole !== "admin" && (
+                  <button
+                    onClick={() => setConfirm({
+                      title: `Delete ${s.name}?`,
+                      message: `This will permanently remove ${s.name}'s account and their stylist profile. This cannot be undone.`,
+                      confirmLabel: "Delete Account",
+                      danger: true,
+                      action: () => handleStaffDelete(s),
+                    })}
+                    style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.error}40`, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.error, letterSpacing: "0.06em" }}
+                    onMouseOver={e => (e.currentTarget.style.background = `${C.error}12`)}
+                    onMouseOut={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </Row>
           ))

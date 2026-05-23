@@ -92,6 +92,12 @@ export const addProduct      = data     => addDoc(collection(db, "inventory"),  
 export const updateProduct   = (id, d)  => updateDoc(doc(db, "inventory",    id), d);
 export const deleteProduct   = id       => deleteDoc(doc(db, "inventory",    id));
 
+// ── Appointments ──────────────────────────────────────────────────────────────
+export const useAppointments   = () => useCollection("appointments", "date", []);
+export const addAppointment    = data    => addDoc(collection(db, "appointments"),  { ...data, createdAt: serverTimestamp() });
+export const updateAppointment = (id, d) => updateDoc(doc(db, "appointments", id), d);
+export const deleteAppointment = id      => deleteDoc(doc(db, "appointments", id));
+
 // ── Transactions ──────────────────────────────────────────────────────────────
 export const useTransactions  = () => useCollection("transactions",  "createdAt", mock.transactions);
 export const addTransaction   = data    => addDoc(collection(db, "transactions"),  { ...data, createdAt: serverTimestamp() });

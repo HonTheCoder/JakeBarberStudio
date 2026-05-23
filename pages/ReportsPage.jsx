@@ -7,6 +7,7 @@ import { C } from "../tokens/design";
 import { KpiCard, SectionTitle, SecondaryBtn } from "../components/ui";
 import { useStats } from "../hooks/useStats";
 import useIsMobile from "../hooks/useIsMobile";
+import { fmt } from "../utils/currency";
 
 /* ── Skeleton ────────────────────────────────────────────────────────────── */
 const Shimmer = ({ w = "100%", h = 24, r = 8 }) => (
@@ -41,7 +42,90 @@ const ReportsPage = () => {
   const isMobile = useIsMobile();
   const { stats, loading } = useStats();
 
-  const fmt = n => `$${Number(n).toLocaleString()}`;
+  const exportPDF = () => {
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    const kpiRows = [
+      ["Total Revenue",  fmt(totalRevenue)],
+      ["Transactions",   txCount],
+      ["Avg. Ticket",    fmt(avgTicket)],
+      ["Refund Rate",    `${refundRate}% (${refundCount} refunds)`],
+    ].map(([l, v]) => `<tr><td>${l}</td><td><strong>${v}</strong></td></tr>`).join("");
+
+    const barberRows = barberPerf.map(b =>
+      `<tr><td>${b.barber}</td><td>${fmt(b.revenue)}</td><td>${b.clients}</td><td>${fmt(b.avgTicket)}</td></tr>`
+    ).join("") || `<tr><td colspan="4" style="color:#888">No barber data</td></tr>`;
+
+    const txRows = transactions.slice(0, 50).map(t =>
+      `<tr><td>${t.txnId ?? t.id ?? ""}</td><td>${t.client ?? ""}</td><td>${t.service ?? ""}</td><td>${t.barber ?? ""}</td><td>${t.amount ?? ""}</td><td>${t.status ?? ""}</td></tr>`
+    ).join("") || `<tr><td colspan="6" style="color:#888">No transactions</td></tr>`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+      <title>The Parlour — Reports</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 40px; }
+        h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+        .meta { color: #666; font-size: 12px; margin-bottom: 32px; }
+        h2 { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #444; margin: 28px 0 12px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #888; background: #f5f5f5; }
+        td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 12px; }
+        .kpi td:first-child { color: #666; }
+        .kpi td:last-child { text-align: right; }
+        @page { margin: 20mm; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head><body>
+      <h1>The Parlour</h1>
+      <p class="meta">Report generated on ${date}</p>
+
+      <h2>Key Metrics</h2>
+      <table class="kpi"><tbody>${kpiRows}</tbody></table>
+
+      <h2>Barber Performance</h2>
+      <table><thead><tr><th>Barber</th><th>Revenue</th><th>Clients</th><th>Avg. Ticket</th></tr></thead>
+      <tbody>${barberRows}</tbody></table>
+
+      <h2>Transaction Log (last 50)</h2>
+      <table><thead><tr><th>ID</th><th>Client</th><th>Service</th><th>Barber</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>${txRows}</tbody></table>
+    </body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;width:0;height:0;border:none;opacity:0;";
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    }, 250);
+  };
+
+  const exportCSV = () => {
+    const headers = ["ID", "Client", "Service", "Barber", "Amount", "Status"];
+    const rows = transactions.map(t => [
+      t.txnId ?? t.id ?? "",
+      t.client  ?? "",
+      t.service ?? "",
+      t.barber  ?? "",
+      t.amount  ?? "",
+      t.status  ?? "",
+    ]);
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `reports_export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
@@ -71,8 +155,8 @@ const ReportsPage = () => {
 
       {/* Export actions */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 28, gap: 10 }}>
-        <SecondaryBtn icon="download">Export PDF</SecondaryBtn>
-        <SecondaryBtn icon="table_view">Export CSV</SecondaryBtn>
+        <SecondaryBtn icon="download"   onClick={exportPDF}>Export PDF</SecondaryBtn>
+        <SecondaryBtn icon="table_view" onClick={exportCSV}>Export CSV</SecondaryBtn>
       </div>
 
       {/* KPI Row */}
@@ -106,8 +190,8 @@ const ReportsPage = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outlineVariant} strokeOpacity={0.3} vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: "Geist", fontSize: 10, fill: C.onSurfaceVariant }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={40} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [`$${v.toLocaleString()}`, ""]} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => fmt(v, true)} width={40} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [fmt(v), ""]} />
                 <Area type="monotone" dataKey="revenue" stroke={C.primary}        strokeWidth={2.5} fill="url(#rGrad)" dot={{ fill: C.primary, r: 3 }} activeDot={{ r: 5 }} name="Actual" />
                 <Area type="monotone" dataKey="target"  stroke={C.outlineVariant} strokeWidth={1.5} fill="none" strokeDasharray="4 4" dot={false} name="Target" />
               </AreaChart>
@@ -141,8 +225,8 @@ const ReportsPage = () => {
               <BarChart data={salesData} barSize={isMobile ? 22 : 34}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outlineVariant} strokeOpacity={0.2} vertical={false} />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontFamily: "Geist", fontSize: 10, fill: C.onSurfaceVariant }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => `$${(v/1000).toFixed(1)}k`} width={40} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [`$${v.toLocaleString()}`, "Sales"]} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => fmt(v, true)} width={40} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [fmt(v), "Sales"]} />
                 <Bar dataKey="sales" fill={C.primary} radius={[6,6,0,0]} />
               </BarChart>
             </ResponsiveContainer>

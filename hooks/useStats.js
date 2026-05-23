@@ -131,15 +131,15 @@ export const useStats = () => {
       }));
 
     /* ── Barber performance ───────────────────────────────────────────────── */
-    const byBarber = {};
+    const byBarber = {}; // keyed by normalised lowercase name
     completed.forEach(t => {
-      const b = t.barber ?? "Unknown";
-      if (!byBarber[b]) byBarber[b] = { revenue: 0, clients: 0 };
-      byBarber[b].revenue += toNum(t.amount);
-      byBarber[b].clients += 1;
+      const key = (t.barber ?? "Unknown").trim().toLowerCase();
+      if (!byBarber[key]) byBarber[key] = { revenue: 0, clients: 0, displayName: (t.barber ?? "Unknown").trim() };
+      byBarber[key].revenue += toNum(t.amount);
+      byBarber[key].clients += 1;
     });
-    const barberPerf = Object.entries(byBarber).map(([name, d]) => ({
-      barber:    name,
+    const barberPerf = Object.values(byBarber).map(d => ({
+      barber:    d.displayName,
       revenue:   d.revenue,
       clients:   d.clients,
       avgTicket: d.clients ? Math.round(d.revenue / d.clients) : 0,
@@ -148,7 +148,9 @@ export const useStats = () => {
     /* ── Top barbers (for Dashboard cards) ───────────────────────────────── */
     const topBarbers = stylists
       .map(s => {
-        const perf = byBarber[s.name] ?? { revenue: 0, clients: 0 };
+        // Normalise stylist name for lookup — tolerates case/whitespace mismatches
+        const key  = (s.name ?? "").trim().toLowerCase();
+        const perf = byBarber[key] ?? { revenue: 0, clients: 0 };
         return {
           ...s,
           revenue:  `$${perf.revenue.toLocaleString()}`,

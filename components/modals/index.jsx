@@ -5,6 +5,7 @@ import {
   addClient, updateClient, deleteClient,
   addProduct, updateProduct, deleteProduct, addStockMovement,
   addTransaction, addStylist, updateStylist, deleteStylist,
+  useStylists,
 } from "../../hooks/useFirestore";
 
 /* ─── Shared Overlay ──────────────────────────────────────────────────────── */
@@ -305,8 +306,10 @@ export const AddClientModal = ({ onClose, onSaved }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const { data: stylists = [] } = useStylists();
+  const activeBarbers = stylists.filter(s => s.status === "Active");
 
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError("Name is required."); return; }
     setSubmitting(true);
@@ -363,7 +366,10 @@ export const AddClientModal = ({ onClose, onSaved }) => {
           </Field>
         </div>
         <Field label="Last Barber">
-          <input style={inputStyle} placeholder="e.g. Jake" value={form.barber} onChange={set("barber")} />
+          <select style={selectStyle} value={form.barber} onChange={set("barber")}>
+            <option value="">— Select barber —</option>
+            {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
         </Field>
 
         {/* ── Haircut Style ── */}
@@ -466,6 +472,9 @@ export const EditClientModal = ({ client, onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const { data: stylists = [] } = useStylists();
+  const activeBarbers = stylists.filter(s => s.status === "Active");
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async () => {
@@ -496,7 +505,10 @@ export const EditClientModal = ({ client, onClose }) => {
           <input style={inputStyle} value={form.phone} onChange={set("phone")} />
         </Field>
         <Field label="Preferred Barber">
-          <input style={inputStyle} value={form.barber} onChange={set("barber")} />
+          <select style={selectStyle} value={form.barber} onChange={set("barber")}>
+            <option value="">— Select barber —</option>
+            {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
         </Field>
         <Field label="Status">
           <select style={selectStyle} value={form.status} onChange={set("status")}>
@@ -819,6 +831,9 @@ export const NewSaleModal = ({ onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const { data: stylists = [] } = useStylists();
+  const activeBarbers = stylists.filter(s => s.status === "Active");
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async () => {
@@ -851,7 +866,10 @@ export const NewSaleModal = ({ onClose }) => {
           </select>
         </Field>
         <Field label="Barber">
-          <input style={inputStyle} placeholder="e.g. Julian Vance" value={form.barber} onChange={set("barber")} />
+          <select style={selectStyle} value={form.barber} onChange={set("barber")}>
+            <option value="">— Select barber —</option>
+            {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
         </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Amount *">

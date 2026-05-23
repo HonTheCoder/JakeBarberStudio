@@ -73,6 +73,13 @@ const Shell = () => {
     }
   }, [role, active]);
 
+  // Navigate to Settings from any page via custom event (e.g. StylistsPage banner)
+  useEffect(() => {
+    const handler = () => setActive("settings");
+    window.addEventListener("navigate-settings", handler);
+    return () => window.removeEventListener("navigate-settings", handler);
+  }, []);
+
   const handleDarkModeChange   = (val) => setDarkMode(val);
   const handleCompactNavChange = (val) => setCollapsed(val);
 
@@ -138,7 +145,9 @@ const Shell = () => {
         {isOffline && <OfflineBanner />}
         <TopBar
           title={pageMeta[active]?.title}
-          subtitle={pageMeta[active]?.subtitle}
+          subtitle={active === "dashboard"
+            ? `Welcome back, ${user.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`
+            : pageMeta[active]?.subtitle}
           search={search}
           setSearch={setSearch}
           isMobile={isMobile}

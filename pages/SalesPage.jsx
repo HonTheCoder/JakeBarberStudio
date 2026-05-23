@@ -5,6 +5,7 @@ import { C } from "../tokens/design";
 import { KpiCard, Badge, Icon, SectionTitle, PrimaryBtn, SecondaryBtn } from "../components/ui";
 import { NewSaleModal } from "../components/modals";
 import { useTransactions } from "../hooks/useFirestore";
+import { fmt } from "../utils/currency";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -30,8 +31,31 @@ const SalesPage = ({ search = "" }) => {
   const [showModal, setShowModal] = useState(false);
   const isMobile = useIsMobile();
 
-  const q = (search ?? "").toLowerCase();
+  const exportCSV = () => {
+    const headers = ["Transaction ID", "Date", "Client", "Service", "Barber", "Method", "Amount", "Status"];
+    const rows = filtered.map(t => [
+      t.txnId   ?? "",
+      t.date    ?? "",
+      t.client  ?? "",
+      t.service ?? "",
+      t.barber  ?? "",
+      t.method  ?? "",
+      t.amount  ?? "",
+      t.status  ?? "",
+    ]);
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `sales_export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
+  const q = search.toLowerCase();
   const filtered = transactions.filter(t =>
     t.client?.toLowerCase().includes(q) ||
     t.txnId?.toLowerCase().includes(q)
@@ -82,10 +106,10 @@ const SalesPage = ({ search = "" }) => {
 
       {/* KPI Row */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 40 }}>
-        <KpiCard icon="payments"     label="Total Revenue"  value={`$${totalRevenue.toLocaleString()}`} trend="+12.5%" />
-        <KpiCard icon="receipt"      label="Transactions"   value={transactions.length}                 trend={`${transactions.length} total`} />
-        <KpiCard icon="check_circle" label="Completed"      value={completed.length}                    trend="live" />
-        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={`$${avgTicket}`}                     trend="+3.1%" />
+        <KpiCard icon="payments"     label="Total Revenue"  value={fmt(totalRevenue)}    trend="+12.5%" />
+        <KpiCard icon="receipt"      label="Transactions"   value={transactions.length}  trend={`${transactions.length} total`} />
+        <KpiCard icon="check_circle" label="Completed"      value={completed.length}     trend="live" />
+        <KpiCard icon="trending_up"  label="Avg. Ticket"    value={fmt(avgTicket)}       trend="+3.1%" />
       </div>
 
       {/* Sales Chart */}
@@ -116,8 +140,8 @@ const SalesPage = ({ search = "" }) => {
             <BarChart data={chartData} barSize={isMobile ? 24 : 40}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.outlineVariant} strokeOpacity={0.2} vertical={false} />
               <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontFamily: "Geist", fontSize: 10, fill: C.onSurfaceVariant }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => `$${(v/1000).toFixed(1)}k`} width={40} />
-              <Tooltip contentStyle={{ background: "#fff", border: `1px solid ${C.outlineVariant}`, borderRadius: 12, fontFamily: "Inter", fontSize: 13 }} formatter={v => [`$${v.toLocaleString()}`, "Sales"]} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => fmt(v, true)} width={40} />
+              <Tooltip contentStyle={{ background: "#fff", border: `1px solid ${C.outlineVariant}`, borderRadius: 12, fontFamily: "Inter", fontSize: 13 }} formatter={v => [fmt(v), "Sales"]} />
               <Bar dataKey="sales" fill={C.primary} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -128,7 +152,7 @@ const SalesPage = ({ search = "" }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
         <SectionTitle title="Recent Transactions" />
         <div style={{ display: "flex", gap: 8, marginTop: -28 }}>
-          {!isMobile && <SecondaryBtn icon="download">Export CSV</SecondaryBtn>}
+          {!isMobile && <SecondaryBtn icon="download" onClick={exportCSV}>Export CSV</SecondaryBtn>}
           <PrimaryBtn icon="receipt_long" onClick={() => setShowModal(true)}>New Sale</PrimaryBtn>
         </div>
       </div>

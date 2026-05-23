@@ -4,11 +4,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
 import { useStats } from "../hooks/useStats";
-import { useClients, useStylists } from "../hooks/useFirestore";
+import { useClients, useStylists, addAppointment, useAppointments } from "../hooks/useFirestore";
+import { AddClientModal, AddStylistModal } from "../components/modals";
 import { Icon, Badge, SectionTitle } from "../components/ui";
 
+import { fmt } from "../utils/currency";
+
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
-const fmt = n => `$${Number(n).toLocaleString()}`;
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
 const Sk = ({ w = "100%", h = 16, r = 8, style: s = {} }) => (
@@ -119,18 +121,176 @@ const ClientAvatar = ({ initials, name, sub, status }) => (
   </div>
 );
 
+/* ─── Add Appointment Modal ──────────────────────────────────────────────── */
+const SERVICES = ["Haircut", "Beard Trim", "Haircut & Beard", "Hot Towel Shave", "Hair Colour", "Fade", "Kids Cut"];
+const TIMES    = ["9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM","12:00 PM","1:00 PM","1:30 PM","2:00 PM","2:30 PM","3:00 PM","3:30 PM","4:00 PM","4:30 PM","5:00 PM"];
+
+const inputStyle = {
+  width: "100%", padding: "10px 14px",
+  background: C.surfaceLow,
+  border: `1px solid ${C.outlineVariant}40`,
+  borderRadius: 10,
+  fontFamily: "Inter", fontSize: 14, color: C.onSurface,
+  boxSizing: "border-box",
+};
+
+const AddAppointmentModal = ({ onClose, clients, stylists, userId }) => {
+  const today = new Date().toISOString().split("T")[0];
+  const [form, setForm] = useState({
+    client:  "",
+    barber:  "",
+    service: SERVICES[0],
+    date:    today,
+    time:    TIMES[0],
+    notes:   "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState("");
+  const [done, setDone] = useState(false);
+
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handle = async () => {
+    if (!form.client.trim()) { setErr("Please enter a client name."); return; }
+    if (!form.barber.trim()) { setErr("Please select a barber."); return; }
+    setBusy(true); setErr("");
+    try {
+      const selectedStylist = (stylists ?? []).find(s => s.name === form.barber);
+      await addAppointment({
+        client:    form.client.trim(),
+        barber:    form.barber,
+        barberUid: selectedStylist?.uid ?? null,
+        service:   form.service,
+        date:      form.date,
+        time:      form.time,
+        notes:     form.notes.trim(),
+        status:    "Pending",
+        amount:    "0",
+      });
+      setDone(true);
+    } catch (e) {
+      setErr("Failed to save appointment. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activeBarbers = (stylists ?? []).filter(s => s.status === "Active");
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+
+        {done ? (
+          <div style={{ textAlign: "center", padding: "8px 0" }}>
+            <div style={{ width: 52, height: 52, background: "#dcfce7", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="event_available" size={26} style={{ color: "#166534" }} />
+            </div>
+            <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 6 }}>Appointment booked!</p>
+            <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24 }}>
+              <strong>{form.client}</strong> with <strong>{form.barber}</strong> at <strong>{form.time}</strong> on <strong>{form.date}</strong>.
+            </p>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 40, height: 40, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="event_add" size={20} style={{ color: C.primary }} />
+                </div>
+                <h2 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 500, color: C.primary }}>Add Appointment</h2>
+              </div>
+              <button onClick={onClose} style={{ padding: 6, borderRadius: 8 }}
+                onMouseOver={e => (e.currentTarget.style.background = C.surfaceLow)}
+                onMouseOut={e => (e.currentTarget.style.background = "transparent")}>
+                <Icon name="close" size={20} style={{ color: C.onSurfaceVariant }} />
+              </button>
+            </div>
+
+            {/* Client */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Client *</label>
+              <input style={inputStyle} list="client-list" placeholder="Search or enter client name" value={form.client} onChange={set("client")} />
+              <datalist id="client-list">
+                {(clients ?? []).map(c => <option key={c.id} value={c.name} />)}
+              </datalist>
+            </div>
+
+            {/* Barber */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Barber *</label>
+              <select style={{ ...inputStyle, appearance: "none" }} value={form.barber} onChange={set("barber")}>
+                <option value="">Select barber…</option>
+                {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+
+            {/* Service */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Service</label>
+              <select style={{ ...inputStyle, appearance: "none" }} value={form.service} onChange={set("service")}>
+                {SERVICES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {/* Date + Time */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+              <div>
+                <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Date</label>
+                <input type="date" style={inputStyle} value={form.date} onChange={set("date")} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Time</label>
+                <select style={{ ...inputStyle, appearance: "none" }} value={form.time} onChange={set("time")}>
+                  {TIMES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Notes</label>
+              <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 70 }} placeholder="Optional notes…" value={form.notes} onChange={set("notes")} />
+            </div>
+
+            {err && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginBottom: 16 }}>
+                <Icon name="error" size={15} style={{ color: C.error, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: C.error }}>{err}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={onClose} style={{ padding: "10px 16px", borderRadius: 10, border: `1px solid ${C.outlineVariant}`, fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant }}>Cancel</button>
+              <button onClick={handle} disabled={busy} style={{ padding: "10px 20px", borderRadius: 10, background: busy ? C.outlineVariant : C.primary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}>
+                {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
+                {busy ? "Saving…" : "Book Appointment"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ADMIN DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
-const AdminDashboard = ({ stats, loading, clients, stylists }) => {
-  /* ── Today's mock appointments from existing transaction data ── */
-  const todayAppts = (stats?.transactions ?? []).slice(0, 6).map((t, i) => ({
-    time: ["9:00 AM","9:45 AM","10:30 AM","11:15 AM","1:00 PM","2:30 PM"][i] ?? "–",
-    client: t.client,
-    barber: t.barber,
-    service: t.service,
-    status: i === 4 ? "Pending" : i === 5 ? "Confirmed" : "Completed",
-  }));
+const AdminDashboard = ({ stats, loading, clients, stylists, appointments, userId }) => {
+  const [showAddAppt,   setShowAddAppt]   = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddBarber, setShowAddBarber] = useState(false);
+
+  /* ── Today's appointments from real appointments collection ── */
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayAppts = (appointments ?? [])
+    .filter(a => a.date === todayStr)
+    .sort((a, b) => a.time.localeCompare(b.time));
 
   const activeBarbers = (stylists ?? []).filter(s => s.status === "Active").length;
   const recentClients = (clients ?? []).slice(0, 4);
@@ -151,9 +311,9 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
 
       {/* ── Quick Actions ── */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 36 }}>
-        <QuickAction icon="event_add"    label="Add Appointment" />
-        <QuickAction icon="person_add"   label="Add Client"      />
-        <QuickAction icon="content_cut"  label="Add Barber"      />
+        <QuickAction icon="event_add"    label="Add Appointment" onClick={() => setShowAddAppt(true)} />
+        <QuickAction icon="person_add"   label="Add Client"      onClick={() => setShowAddClient(true)} />
+        <QuickAction icon="content_cut"  label="Add Barber"      onClick={() => setShowAddBarber(true)} />
       </div>
 
       {/* ── Weekly Sales Chart + Recent Clients ── */}
@@ -238,6 +398,29 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
           </div>
         )}
       </div>
+
+      {/* ── Add Appointment Modal ── */}
+      {showAddAppt && (
+        <AddAppointmentModal
+          onClose={() => setShowAddAppt(false)}
+          clients={clients}
+          stylists={stylists}
+          userId={userId}
+        />
+      )}
+
+      {/* ── Add Client Modal ── */}
+      {showAddClient && (
+        <AddClientModal
+          onClose={() => setShowAddClient(false)}
+          onSaved={() => setShowAddClient(false)}
+        />
+      )}
+
+      {/* ── Add Barber Modal ── */}
+      {showAddBarber && (
+        <AddStylistModal onClose={() => setShowAddBarber(false)} />
+      )}
     </div>
   );
 };
@@ -245,30 +428,39 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
 /* ═══════════════════════════════════════════════════════════════════════════
    BARBER DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
-const BarberDashboard = ({ stats, loading, clients, userEmail }) => {
-  /* ── Derive barber name from email ── */
-  const barberName = userEmail ? userEmail.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Barber";
+const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists, appointments }) => {
+  /* ── Resolve barber's display name from stylists collection via uid ── */
+  const stylistRecord = (stylists ?? []).find(s => s.uid === userId);
+  const barberName = stylistRecord?.name
+    ?? (userEmail ? userEmail.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Barber");
 
-  /* ── Filter transactions for this barber (best-effort match) ── */
+  /* ── Filter transactions for this barber — uid match first, name fallback ── */
   const allTx = stats?.transactions ?? [];
   const myTx = allTx.filter(t =>
-    barberName === "Barber"
-      ? true
-      : (t.barber ?? "").toLowerCase().includes(barberName.split(" ")[0]?.toLowerCase() ?? "")
+    t.barberUid
+      ? t.barberUid === userId
+      : (t.barber ?? "").toLowerCase() === barberName.toLowerCase()
   );
   const myCompleted = myTx.filter(t => t.status === "Completed");
   const myEarnings = myCompleted.reduce((s, t) => s + (parseFloat(String(t.amount ?? "0").replace(/[$,]/g, "")) || 0), 0);
   const myPending = myTx.filter(t => t.status !== "Completed" && t.status !== "Refunded");
 
-  /* ── Build today's schedule from transactions ── */
-  const TIMES = ["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:30 PM", "2:30 PM", "3:30 PM", "4:30 PM"];
-  const schedule = myTx.slice(0, 8).map((t, i) => ({
-    time: TIMES[i] ?? `${9 + i}:00 AM`,
-    client: t.client,
-    service: t.service,
-    status: i === 0 || i === 1 ? "Completed" : i === 2 ? "In Progress" : "Pending",
-    initials: (t.client ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
-  }));
+  /* ── Today's schedule from real appointments collection — uid match first ── */
+  const todayStr = new Date().toISOString().split("T")[0];
+  const schedule = (appointments ?? [])
+    .filter(a => a.date === todayStr && (
+      a.barberUid
+        ? a.barberUid === userId
+        : (a.barber ?? "").toLowerCase() === barberName.toLowerCase()
+    ))
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map(a => ({
+      time:     a.time,
+      client:   a.client,
+      service:  a.service,
+      status:   a.status ?? "Pending",
+      initials: (a.client ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+    }));
 
   const recentClients = (clients ?? []).slice(0, 3);
 
@@ -391,6 +583,7 @@ const DashboardPage = () => {
   const { stats, loading } = useStats();
   const { data: clients } = useClients();
   const { data: stylists } = useStylists();
+  const { data: appointments } = useAppointments();
 
   if (role === "barber") {
     return (
@@ -398,7 +591,10 @@ const DashboardPage = () => {
         stats={stats}
         loading={loading}
         clients={clients}
+        stylists={stylists}
+        userId={user?.uid}
         userEmail={user?.email}
+        appointments={appointments}
       />
     );
   }
@@ -409,6 +605,8 @@ const DashboardPage = () => {
       loading={loading}
       clients={clients}
       stylists={stylists}
+      userId={user?.uid}
+      appointments={appointments}
     />
   );
 };

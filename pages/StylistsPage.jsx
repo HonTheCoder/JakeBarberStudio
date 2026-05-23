@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { C } from "../tokens/design";
-import { Icon, PrimaryBtn, SecondaryBtn, ErrorBanner } from "../components/ui";
-import { useStylists } from "../hooks/useFirestore";
-import { AddStylistModal, EditStylistModal, DeleteStylistModal } from "../components/modals";
+import { Icon, SecondaryBtn, ErrorBanner } from "../components/ui";
+import { useStylists, useTransactions } from "../hooks/useFirestore";
+import { EditStylistModal, DeleteStylistModal } from "../components/modals";
 import useIsMobile from "../hooks/useIsMobile";
 
 /* ── Status badge ────────────────────────────────────────────────────────── */
@@ -108,9 +108,34 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
 /* ── Page ────────────────────────────────────────────────────────────────── */
 const StylistsPage = ({ search = "" }) => {
   const isMobile = useIsMobile();
-  const { data: stylists, loading, error } = useStylists();
+  const { data: stylists,     loading,  error  } = useStylists();
+  const { data: transactions, loading: txLoading } = useTransactions();
 
-  const [showAdd,    setShowAdd]    = useState(false);
+  // Aggregate bookings & revenue per barber name from live transactions
+  const barberStats = useMemo(() => {
+    const map = {};
+    (transactions ?? []).forEach(t => {
+      if (!t.barber) return;
+      if (!map[t.barber]) map[t.barber] = { bookings: 0, revenue: 0 };
+      map[t.barber].bookings += 1;
+      const amt = parseFloat((t.amount ?? "0").toString().replace(/[$,]/g, "")) || 0;
+      if (t.status !== "Refunded") map[t.barber].revenue += amt;
+    });
+    return map;
+  }, [transactions]);
+
+  // Enrich each stylist with live aggregated stats
+  const enriched = useMemo(() =>
+    (stylists ?? []).map(s => {
+      const stats = barberStats[s.name] ?? { bookings: 0, revenue: 0 };
+      return {
+        ...s,
+        bookings: stats.bookings,
+        revenue:  `$${stats.revenue.toLocaleString()}`,
+      };
+    }),
+  [stylists, barberStats]);
+
   const [editTarget, setEditTarget] = useState(null);
   const [delTarget,  setDelTarget]  = useState(null);
   const [filter,     setFilter]     = useState("All");
@@ -119,7 +144,7 @@ const StylistsPage = ({ search = "" }) => {
 
   const q = (search ?? "").toLowerCase();
 
-  const filtered = stylists
+  const filtered = enriched
     .filter(s => filter === "All" || s.status === filter)
     .filter(s =>
       !q ||
@@ -127,18 +152,31 @@ const StylistsPage = ({ search = "" }) => {
       s.role?.toLowerCase().includes(q)
     );
 
-  const active    = stylists.filter(s => s.status === "Active").length;
-  const totalRev  = stylists.reduce((sum, s) => sum + parseFloat((s.revenue ?? "$0").replace(/[$,]/g, "")), 0);
-  const totalBook = stylists.reduce((sum, s) => sum + (s.bookings ?? 0), 0);
+  const active    = enriched.filter(s => s.status === "Active").length;
+  const totalRev  = enriched.reduce((sum, s) => sum + parseFloat((s.revenue ?? "$0").replace(/[$,]/g, "")), 0);
+  const totalBook = enriched.reduce((sum, s) => sum + (s.bookings ?? 0), 0);
 
   if (error) return <ErrorBanner message={error} />;
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
 
-      {/* Header action */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 28 }}>
-        <PrimaryBtn icon="person_add" onClick={() => setShowAdd(true)}>Add Stylist</PrimaryBtn>
+      {/* Info banner - stylists auto-sync from Staff Accounts */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 12, flexWrap: "wrap",
+        background: C.secondaryContainer, borderRadius: 14,
+        padding: "14px 20px", marginBottom: 28,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="info" size={18} style={{ color: C.secondary, flexShrink: 0 }} />
+          <span style={{ fontFamily: "Geist", fontSize: 13, color: C.secondary, fontWeight: 500 }}>
+            Stylist profiles are created automatically when a barber account is added in Settings.
+          </span>
+        </div>
+        <SecondaryBtn icon="settings" onClick={() => window.dispatchEvent(new CustomEvent("navigate-settings"))}>
+          Staff Accounts
+        </SecondaryBtn>
       </div>
 
       {/* KPI strip */}
@@ -193,7 +231,6 @@ const StylistsPage = ({ search = "" }) => {
       )}
 
       {/* Modals */}
-      {showAdd    && <AddStylistModal    onClose={() => setShowAdd(false)} />}
       {editTarget && <EditStylistModal   stylist={editTarget} onClose={() => setEditTarget(null)} />}
       {delTarget  && <DeleteStylistModal stylist={delTarget}  onClose={() => setDelTarget(null)} />}
     </div>
