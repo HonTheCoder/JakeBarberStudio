@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import QRCode from "qrcode";
 import useIsMobile from "../hooks/useIsMobile";
 import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
@@ -74,120 +75,25 @@ const Avatar = ({ client, size = 40, fontSize = 13 }) => {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   REAL QR CODE — pure JS, no library
-   Implements QR Version 1 (21×21) for short strings via a lookup-based
-   approach using the qr-code-generator algorithm condensed for short URLs.
-   For client IDs we use a canvas-based approach via an inlined tiny encoder.
+   BRANDED QR CARD — spec-compliant QR via the `qrcode` npm package
 ───────────────────────────────────────────────────────────────────────────── */
-
-// Minimal QR matrix builder for short ASCII strings (up to ~17 chars, version 1-H)
-// Uses the qr-code-styling logic, simplified.
-function buildQRMatrix(text) {
-  // We'll use a deterministic but visually authentic QR pattern.
-  // For a real production QR, drop in the `qrcode` npm package.
-  // This implementation uses the standard QR finder + format pattern
-  // with data modules derived from the actual encoded bytes.
-
-  const N = 21; // Version 1
-  const mat = Array.from({ length: N }, () => Array(N).fill(null)); // null=unset, true=dark, false=light
-
-  // Finder pattern (top-left, top-right, bottom-left)
-  const finder = (r, c) => {
-    for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) {
-      mat[r + i][c + j] = (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4));
-    }
-    // Separator
-    for (let k = 0; k < 8; k++) {
-      if (r + 7 < N && c + k < N) mat[r + 7][c + k] = false;
-      if (r + k < N && c + 7 < N) mat[r + k][c + 7] = false;
-    }
-  };
-  finder(0, 0); finder(0, 14); finder(14, 0);
-
-  // Timing patterns
-  for (let i = 8; i <= 12; i++) {
-    mat[6][i] = (i % 2 === 0);
-    mat[i][6] = (i % 2 === 0);
-  }
-
-  // Dark module
-  mat[13][8] = true;
-
-  // Format info (mask 0, error level H = 0b10) — pre-computed bits: 101010000010010
-  const fmtBits = [1,0,1,0,1,0,0,0,0,0,1,0,0,1,0];
-  [0,1,2,3,4,5,7].forEach((pos, i) => { mat[8][pos] = fmtBits[i]; mat[pos][8] = fmtBits[14 - i]; });
-  [8,9,10,11,12,13,14].forEach((pos, i) => { mat[pos][8] = fmtBits[6 + i]; mat[8][pos] = fmtBits[8 + i]; });
-
-  // Data encoding — byte mode, ECI default
-  const bytes = [];
-  for (let i = 0; i < text.length; i++) bytes.push(text.charCodeAt(i));
-  // Build bitstream: mode(0100) + count(8 bits) + data + terminator
-  const bits = [];
-  const push = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >> i) & 1); };
-  push(0b0100, 4);
-  push(bytes.length, 8);
-  bytes.forEach(b => push(b, 8));
-  push(0b0000, 4); // terminator
-  // Pad to 152 bits (19 codewords for v1-H)
-  while (bits.length < 152) {
-    bits.push(1,1,1,0,1,1,0,0); if (bits.length >= 152) break;
-    bits.push(0,0,0,1,0,0,0,1);
-  }
-  bits.length = 152;
-
-  // Data placement — zigzag upward columns right to left, skipping timing col 6
-  let bitIdx = 0;
-  const isReserved = (r, c) => mat[r][c] !== null;
-  for (let col = N - 1; col >= 0; col -= 2) {
-    const effectiveCol = col <= 6 ? col - 1 : col; // skip col 6
-    for (let row = N - 1; row >= 0; row--) {
-      for (let dc = 0; dc <= 1; dc++) {
-        const c = effectiveCol - dc;
-        if (c < 0 || c >= N) continue;
-        if (!isReserved(row, c)) {
-          const bit = bits[bitIdx++] ?? 0;
-          // Mask 0: (row + col) % 2 === 0 → invert
-          mat[row][c] = ((row + c) % 2 === 0) ? !bit : !!bit;
-        }
-      }
-    }
-  }
-
-  // Fill any remaining null as light
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    if (mat[r][c] === null) mat[r][c] = false;
-  }
-
-  return mat;
-}
-
-/* Branded QR Card — shows real QR + Jake Barber Studio header + client name */
 const BrandedQRCard = ({ client }) => {
   const canvasRef = useRef(null);
-  const cardRef = useRef(null);
   const [downloaded, setDownloaded] = useState(false);
 
   const qrData = `jake-barber-studio:client:${client.id ?? "000"}`;
-  const matrix = useMemo(() => buildQRMatrix(qrData.slice(0, 17)), [qrData]);
 
+  // Render QR code onto the canvas using the `qrcode` library
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const N = matrix.length;
-    const cell = 8;
-    const pad = 16;
-    canvas.width = N * cell + pad * 2;
-    canvas.height = N * cell + pad * 2;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        ctx.fillStyle = matrix[r][c] ? "#1b1c1c" : "#ffffff";
-        ctx.fillRect(pad + c * cell, pad + r * cell, cell, cell);
-      }
-    }
-  }, [matrix]);
+    QRCode.toCanvas(canvas, qrData, {
+      width: 168,
+      margin: 2,
+      color: { dark: "#1b1c1c", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    }).catch(err => console.error("QR render error:", err));
+  }, [qrData]);
 
   const handleDownload = () => {
     // Build a full branded card on an offscreen canvas
@@ -666,6 +572,10 @@ const ClientsPage = ({ search = "" }) => {
   const [sortMode,     setSortMode]     = useState("name"); // "name" | "visits" | "recent"
   const [localSearch,  setLocalSearch]  = useState("");
 
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+
   // Combined search (from TopBar or local)
   const q = (localSearch || search).toLowerCase().trim();
 
@@ -676,6 +586,9 @@ const ClientsPage = ({ search = "" }) => {
     const frequent = clients.filter(c => parseInt(c.visits ?? 0) >= 10).length;
     return { total, newCount, frequent };
   }, [clients]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [q, statusFilter, sortMode]);
 
   // Filtered + sorted
   const filtered = useMemo(() => {
@@ -698,6 +611,9 @@ const ClientsPage = ({ search = "" }) => {
 
     return list;
   }, [clients, statusFilter, q, sortMode]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const openDetail = (client) => {
     setDetailClient(client);
@@ -839,8 +755,9 @@ const ClientsPage = ({ search = "" }) => {
 
       {/* ── Mobile Card List ── */}
       {isMobile && filtered.length > 0 && (
+        <>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map(c => (
+          {paginated.map(c => (
             <div
               key={c.id}
               className="card"
@@ -875,6 +792,38 @@ const ClientsPage = ({ search = "" }) => {
             </div>
           ))}
         </div>
+
+        {/* Mobile pagination */}
+        {totalPages > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                background: C.surfaceLowest, opacity: page === 1 ? 0.4 : 1,
+                border: `1px solid ${C.outlineVariant}40`,
+              }}
+            >
+              <Icon name="chevron_left" size={20} style={{ color: C.onSurfaceVariant }} />
+            </button>
+            <span style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant }}>
+              Page <span style={{ fontWeight: 700, color: C.primary }}>{page}</span> of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              style={{
+                width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                background: C.surfaceLowest, opacity: page === totalPages ? 0.4 : 1,
+                border: `1px solid ${C.outlineVariant}40`,
+              }}
+            >
+              <Icon name="chevron_right" size={20} style={{ color: C.onSurfaceVariant }} />
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* ── Desktop Table ── */}
@@ -898,12 +847,12 @@ const ClientsPage = ({ search = "" }) => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c, i) => (
+                {paginated.map((c, i) => (
                   <tr
                     key={c.id}
                     onClick={() => openDetail(c)}
                     style={{
-                      borderBottom: i < filtered.length - 1 ? `1px solid ${C.outlineVariant}20` : "none",
+                      borderBottom: i < paginated.length - 1 ? `1px solid ${C.outlineVariant}20` : "none",
                       cursor: "pointer", transition: "background 0.12s",
                     }}
                     onMouseOver={e => (e.currentTarget.style.background = C.surfaceLow + "80")}
@@ -980,18 +929,74 @@ const ClientsPage = ({ search = "" }) => {
             </table>
           </div>
 
-          {/* Footer count */}
-          <div style={{ padding: "12px 18px", borderTop: `1px solid ${C.outlineVariant}20`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {/* Footer count + pagination */}
+          <div style={{ padding: "12px 18px", borderTop: `1px solid ${C.outlineVariant}20`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
             <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant }}>
-              Showing <span style={{ fontWeight: 600, color: C.primary }}>{filtered.length}</span> of <span style={{ fontWeight: 600, color: C.primary }}>{clients.length}</span> clients
+              Showing <span style={{ fontWeight: 600, color: C.primary }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)}</span> of <span style={{ fontWeight: 600, color: C.primary }}>{filtered.length}</span> clients
+              {statusFilter !== "All" && (
+                <button
+                  onClick={() => { setStatusFilter("All"); setLocalSearch(""); }}
+                  style={{ marginLeft: 12, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.secondary, letterSpacing: "0.06em", textTransform: "uppercase" }}
+                >
+                  Clear Filter
+                </button>
+              )}
             </p>
-            {statusFilter !== "All" && (
-              <button
-                onClick={() => { setStatusFilter("All"); setLocalSearch(""); }}
-                style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.secondary, letterSpacing: "0.06em", textTransform: "uppercase" }}
-              >
-                Clear Filter
-              </button>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: page === 1 ? C.surfaceLow : C.surfaceLowest,
+                    opacity: page === 1 ? 0.4 : 1,
+                    border: `1px solid ${C.outlineVariant}40`,
+                  }}
+                >
+                  <Icon name="chevron_left" size={18} style={{ color: C.onSurfaceVariant }} />
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce((acc, p, idx, arr) => {
+                    if (idx > 0 && p - arr[idx - 1] > 1) acc.push("...");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${idx}`} style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, padding: "0 4px" }}>…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8,
+                          fontFamily: "Geist", fontSize: 12, fontWeight: page === p ? 700 : 500,
+                          background: page === p ? C.primary : C.surfaceLowest,
+                          color: page === p ? "#fff" : C.onSurfaceVariant,
+                          border: `1px solid ${page === p ? C.primary : C.outlineVariant + "40"}`,
+                        }}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: page === totalPages ? C.surfaceLow : C.surfaceLowest,
+                    opacity: page === totalPages ? 0.4 : 1,
+                    border: `1px solid ${C.outlineVariant}40`,
+                  }}
+                >
+                  <Icon name="chevron_right" size={18} style={{ color: C.onSurfaceVariant }} />
+                </button>
+              </div>
             )}
           </div>
         </div>

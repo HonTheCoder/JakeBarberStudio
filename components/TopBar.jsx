@@ -81,8 +81,14 @@ const useOutsideClick = (ref, isOpen, onClose) => {
   }, [isOpen, onClose]);
 };
 
-const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, role, onLogout }) => {
-  const initials  = userEmail ? userEmail.split("@")[0].slice(0, 2).toUpperCase() : "??";
+const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout }) => {
+  const initials = (displayName || userEmail || "")
+    .split(/[\s@]/)[0]
+    .split(/[._]/)
+    .map(p => p[0] ?? "")
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "??";
   const roleLabel = role === "admin" ? "Admin" : "Barber";
 
   /* ── Notifications state ── */

@@ -5,9 +5,10 @@ import { auth, db } from "../firebase";
 import { AuthContext } from "./AuthContext";
 
 export const AuthProvider = ({ children }) => {
-  const [user,       setUser]       = useState(null);
-  const [role,       setRole]       = useState(null);   // "admin" | "barber"
-  const [loading,    setLoading]    = useState(true);
+  const [user,        setUser]        = useState(null);
+  const [role,        setRole]        = useState(null);   // "admin" | "barber"
+  const [displayName, setDisplayName] = useState(null);   // from users/{uid}.name
+  const [loading,     setLoading]     = useState(true);
 
   // MFA challenge state — set when login throws auth/multi-factor-auth-required
   const [mfaError,   setMfaError]   = useState(null);   // the raw Firebase error
@@ -19,7 +20,9 @@ export const AuthProvider = ({ children }) => {
         try {
           const snap = await getDoc(doc(db, "users", u.uid));
           const fetchedRole = snap.exists() ? (snap.data().role ?? "barber") : "barber";
+          const fetchedName = snap.exists() ? (snap.data().name ?? null) : null;
           setRole(fetchedRole);
+          setDisplayName(fetchedName);
         } catch {
           setRole("barber");
         }
@@ -30,6 +33,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(null);
         setRole(null);
+        setDisplayName(null);
       }
       setLoading(false);
     });
@@ -74,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   if (loading) return null;
 
   return (
-    <AuthContext.Provider value={{ user, role, login, logout, mfaError, mfaPending, clearMfaState }}>
+    <AuthContext.Provider value={{ user, role, displayName, login, logout, mfaError, mfaPending, clearMfaState }}>
       {children}
     </AuthContext.Provider>
   );

@@ -5,7 +5,17 @@ import {
   getDocs, setDoc, getDoc, writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import * as mock from "../data/mockData";
+
+// Mock data is only used in development so it never ships to production.
+// Vite statically replaces import.meta.env.DEV with false in prod builds,
+// which lets the bundler tree-shake the entire mockData module out.
+const IS_DEV = import.meta.env.DEV;
+import * as mockModule from "../data/mockData";
+const mock = IS_DEV ? mockModule : {};
+
+// In prod the fallback is always [] so Firestore errors surface as empty
+// state rather than silently showing fake data.
+const devFallback = (data) => (IS_DEV ? (data ?? []) : []);
 
 // Detect if the error is a network/connection error
 const isOfflineError = err =>
@@ -27,11 +37,11 @@ const useCollection = (collectionName, orderField, fallbackData) => {
   useEffect(() => {
     let active = true;
 
-    // Safety net: if Firebase doesn't respond in 8s, fall back to mock data
+    // Safety net: if Firebase doesn't respond in 8s, fall back to mock data in dev only
     timerRef.current = setTimeout(() => {
       if (!active) return;
-      console.warn(`[useFirestore] Timeout on "${collectionName}" — using mock data`);
-      setData(fallbackData ?? []);
+      console.warn(`[useFirestore] Timeout on "${collectionName}" — ${IS_DEV ? "using mock data" : "returning empty"}`);
+      setData(devFallback(fallbackData));
       setError(null);
       setLoading(false);
     }, 8000);
@@ -54,7 +64,7 @@ const useCollection = (collectionName, orderField, fallbackData) => {
         clearTimeout(timerRef.current);
         console.error(`[useFirestore] Error on "${collectionName}":`, err);
         if (isOfflineError(err)) {
-          setData(fallbackData ?? []);
+          setData(devFallback(fallbackData));
           setError(null);
         } else {
           setError(err.message);

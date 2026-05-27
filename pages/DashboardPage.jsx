@@ -103,6 +103,130 @@ const ClientAvatar = ({ initials, name, sub, status }) => (
   </div>
 );
 
+/* ─── Schedule helpers ───────────────────────────────────────────────────── */
+
+/**
+ * Parse a Firestore date value into a JS Date.
+ * Handles Timestamp objects, ISO strings, and "Oct 14, 3:22 PM" style strings.
+ */
+const parseTxDate = (val) => {
+  if (!val) return null;
+  if (val?.toDate) return val.toDate();           // Firestore Timestamp
+  const d = new Date(val);
+  return isNaN(d) ? null : d;
+};
+
+/**
+ * Format a Date to "3:22 PM" display.
+ */
+const fmtTime = (date) =>
+  date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+
+/**
+ * Status pill colour map for appointments.
+ */
+const apptStatusStyle = (status) => {
+  switch (status) {
+    case "Completed": return { bg: "#e6f4ea", color: "#1a7a3c" };
+    case "Refunded":  return { bg: C.errorContainer, color: C.error };
+    default:          return { bg: C.secondaryContainer, color: C.secondary }; // Pending / In-Progress
+  }
+};
+
+/* ─── Today's Schedule panel (real appointment times) ───────────────────── */
+const TodaySchedule = ({ appointments, loading }) => {
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 28 }}>
+        <SectionTitle title="Today's Schedule" subtitle="Your appointments" />
+        {Array(4).fill(null).map((_, i) => (
+          <div key={i} style={{ display: "flex", gap: 16, marginBottom: 18, alignItems: "flex-start" }}>
+            <Sk w={52} h={36} r={8} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <Sk w="55%" h={13} style={{ marginBottom: 6 }} />
+              <Sk w="75%" h={11} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!appointments.length) {
+    return (
+      <div className="card" style={{ padding: 28 }}>
+        <SectionTitle title="Today's Schedule" subtitle="Your appointments" />
+        <div style={{ paddingTop: 24, textAlign: "center" }}>
+          <Icon name="event_available" size={32} style={{ color: C.outlineVariant, marginBottom: 8 }} />
+          <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant }}>
+            No appointments for today
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 28 }}>
+      <SectionTitle title="Today's Schedule" subtitle={`${appointments.length} appointment${appointments.length !== 1 ? "s" : ""} today`} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {appointments.map((appt, i) => {
+          const pill = apptStatusStyle(appt.status);
+          const isLast = i === appointments.length - 1;
+          return (
+            <div
+              key={appt.id ?? i}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 16,
+                padding: "14px 0",
+                borderBottom: isLast ? "none" : `1px solid ${C.outlineVariant}20`,
+              }}
+            >
+              {/* Time column — sourced from the actual date field */}
+              <div style={{
+                minWidth: 56, textAlign: "center",
+                background: C.surfaceLow, borderRadius: 8,
+                padding: "6px 4px", flexShrink: 0,
+              }}>
+                <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 700, color: C.primary, lineHeight: 1.2 }}>
+                  {appt.displayTime}
+                </p>
+              </div>
+
+              {/* Details */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.primary, marginBottom: 2 }}>
+                  {appt.client ?? "—"}
+                </p>
+                <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant }}>
+                  {appt.service ?? "Service not specified"}
+                </p>
+              </div>
+
+              {/* Right: amount + status */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                {appt.amount && (
+                  <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.primary }}>
+                    {appt.amount}
+                  </p>
+                )}
+                <span style={{
+                  fontFamily: "Geist", fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  padding: "2px 8px", borderRadius: 20,
+                  background: pill.bg, color: pill.color,
+                }}>
+                  {appt.status}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ADMIN DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
@@ -211,15 +335,35 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
 
   const recentClients = (clients ?? []).slice(0, 3);
 
+  /* ── Build today's schedule from real appointment time fields ────────────
+     Each transaction's `date` field holds the actual appointment datetime,
+     e.g. "Oct 14, 3:22 PM" or a Firestore Timestamp.
+     We parse it, filter to today, sort ascending by time, then display the
+     real formatted time — no hardcoded TIMES array, no positional index.
+  ─────────────────────────────────────────────────────────────────────── */
+  const now = new Date();
+
+  const todayAppointments = myTx
+    .map(t => {
+      const date = parseTxDate(t.date);
+      return { ...t, _parsed: date };
+    })
+    .filter(t => t._parsed && t._parsed.toDateString() === now.toDateString())
+    .sort((a, b) => a._parsed - b._parsed)          // ascending chronological order
+    .map(t => ({
+      ...t,
+      displayTime: fmtTime(t._parsed),              // e.g. "3:22 PM" from real date
+    }));
+
   return (
     <div>
       {/* ── Greeting ── */}
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant, marginBottom: 4 }}>
-          {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          {now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
         </p>
         <h2 style={{ fontFamily: "Geist", fontSize: 22, fontWeight: 500, color: C.primary }}>
-          Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {barberName.split(" ")[0]} 👋
+          Good {now.getHours() < 12 ? "morning" : now.getHours() < 17 ? "afternoon" : "evening"}, {barberName.split(" ")[0]} 👋
         </h2>
       </div>
 
@@ -230,29 +374,36 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
         <StatCard icon="pending"     label="Pending"         value={myPending.length}        loading={loading} />
       </div>
 
-      {/* ── Recent Clients ── */}
-      <div className="card" style={{ padding: 28, maxWidth: 400 }}>
-        <SectionTitle title="Recent Clients" subtitle="Your regulars" />
-        {loading
-          ? Array(3).fill(null).map((_, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-                <Sk w={36} h={36} r="50%" />
-                <div style={{ flex: 1 }}><Sk w="65%" h={13} style={{ marginBottom: 5 }} /><Sk w="45%" h={11} /></div>
-              </div>
-            ))
-          : recentClients.map((c, i) => (
-              <div key={c.id ?? i} style={{ padding: "10px 0", borderBottom: i < recentClients.length - 1 ? `1px solid ${C.outlineVariant}20` : "none" }}>
-                <ClientAvatar initials={c.initials} name={c.name} sub={`${c.visits} visits`} status={c.status} />
-              </div>
-            ))
-        }
-        {!loading && (
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.outlineVariant}20` }}>
-            <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
-              {(clients ?? []).length} total clients
-            </p>
-          </div>
-        )}
+      {/* ── Today's Schedule + Recent Clients ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
+
+        {/* Today's Schedule — real times from transaction date field */}
+        <TodaySchedule appointments={todayAppointments} loading={loading} />
+
+        {/* Recent Clients */}
+        <div className="card" style={{ padding: 28 }}>
+          <SectionTitle title="Recent Clients" subtitle="Your regulars" />
+          {loading
+            ? Array(3).fill(null).map((_, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                  <Sk w={36} h={36} r="50%" />
+                  <div style={{ flex: 1 }}><Sk w="65%" h={13} style={{ marginBottom: 5 }} /><Sk w="45%" h={11} /></div>
+                </div>
+              ))
+            : recentClients.map((c, i) => (
+                <div key={c.id ?? i} style={{ padding: "10px 0", borderBottom: i < recentClients.length - 1 ? `1px solid ${C.outlineVariant}20` : "none" }}>
+                  <ClientAvatar initials={c.initials} name={c.name} sub={`${c.visits} visits`} status={c.status} />
+                </div>
+              ))
+          }
+          {!loading && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.outlineVariant}20` }}>
+              <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
+                {(clients ?? []).length} total clients
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

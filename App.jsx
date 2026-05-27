@@ -20,12 +20,13 @@ import ComingSoonPage from "./pages/ComingSoonPage";
 
 import { useSettings }       from "./hooks/useFirestore";
 import { useNotifications }  from "./hooks/useNotification";
+import useIdleTimer           from "./hooks/useIdleTimer";
 
 const MOBILE_BREAKPOINT = 768;
 
 /** Inner shell — has access to auth context. */
 const Shell = () => {
-  const { user, role, logout } = useAuth();
+  const { user, role, displayName, logout } = useAuth();
 
   const defaultPage = "dashboard";
 
@@ -36,14 +37,19 @@ const Shell = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isOffline,  setIsOffline]  = useState(!navigator.onLine);
 
-  // Controlled by SettingsPage
-  const [darkMode,   setDarkMode]   = useState(false);
+  // Controlled by SettingsPage — seed from localStorage immediately to avoid flash
+  const [darkMode,   setDarkMode]   = useState(() => {
+    try { return localStorage.getItem("darkMode") === "true"; } catch { return false; }
+  });
 
   // Live notification preferences from Firestore
   const { settings } = useSettings();
 
   // Wire real browser notifications to Firestore listeners
   useNotifications(settings?.notifs);
+
+  // Enforce session timeout: log out after the configured idle period
+  useIdleTimer(settings?.sessionTimeout, logout);
 
   useEffect(() => {
     const handler = () => {
@@ -90,7 +96,10 @@ const Shell = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDarkModeChange   = (val) => setDarkMode(val);
+  const handleDarkModeChange   = (val) => {
+    setDarkMode(val);
+    try { localStorage.setItem("darkMode", String(val)); } catch {}
+  };
   const handleCompactNavChange = (val) => setCollapsed(val);
 
   if (!user) return <LoginPage />;
@@ -155,7 +164,11 @@ const Shell = () => {
         <TopBar
           title={pageMeta[active]?.title}
           subtitle={active === "dashboard"
-            ? `Welcome back, ${user.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`
+            ? `Welcome back, ${
+                displayName
+                  ? displayName.split(" ")[0]
+                  : user.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+              }`
             : pageMeta[active]?.subtitle}
           search={search}
           setSearch={setSearch}
@@ -163,6 +176,7 @@ const Shell = () => {
           onMenuClick={() => setDrawerOpen(true)}
           onLogout={logout}
           userEmail={user.email}
+          displayName={displayName}
           role={role}
         />
         {renderPage()}

@@ -892,8 +892,12 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   const [shop,      setShop]      = useState(DEFAULT_SHOP);
   const [notifs,    setNotifs]    = useState(DEFAULT_NOTIFS);
   const [sessionTimeout, setSessionTimeout] = useState("30");
-  const [darkMode,   setDarkMode]   = useState(false);
-  const [compactNav, setCompactNav] = useState(false);
+  const [darkMode,   setDarkMode]   = useState(() => {
+    try { return localStorage.getItem("darkMode") === "true"; } catch { return false; }
+  });
+  const [compactNav, setCompactNav] = useState(() => {
+    try { return localStorage.getItem("compactNav") === "true"; } catch { return false; }
+  });
 
   // Staff list — now also seeded from Firestore users collection
   const [staff, setStaff] = useState([]);
@@ -931,8 +935,16 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     if (settings.shop)           setShop(s          => ({ ...s, ...settings.shop, currency: "PHP", timezone: "Asia/Manila" }));
     if (settings.notifs)         setNotifs(n        => ({ ...n,          ...settings.notifs }));
     if (settings.sessionTimeout != null) setSessionTimeout(settings.sessionTimeout);
-    if (settings.darkMode      != null) { setDarkMode(settings.darkMode);   onDarkModeChangeRef.current?.(settings.darkMode); }
-    if (settings.compactNav    != null) { setCompactNav(settings.compactNav); onCompactNavChangeRef.current?.(settings.compactNav); }
+    if (settings.darkMode      != null) {
+      setDarkMode(settings.darkMode);
+      onDarkModeChangeRef.current?.(settings.darkMode);
+      try { localStorage.setItem("darkMode", String(settings.darkMode)); } catch {}
+    }
+    if (settings.compactNav    != null) {
+      setCompactNav(settings.compactNav);
+      onCompactNavChangeRef.current?.(settings.compactNav);
+      try { localStorage.setItem("compactNav", String(settings.compactNav)); } catch {}
+    }
   }, [settings]);
 
   const [savedSnapshot, setSavedSnapshot] = useState(null);
@@ -954,12 +966,14 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     const next = !darkMode;
     setDarkMode(next);
     onDarkModeChange?.(next);
+    try { localStorage.setItem("darkMode", String(next)); } catch {}
   };
 
   const handleCompactToggle = () => {
     const next = !compactNav;
     setCompactNav(next);
     onCompactNavChange?.(next);
+    try { localStorage.setItem("compactNav", String(next)); } catch {}
   };
 
   // ── Browser notification permission ────────────────────────────────────
