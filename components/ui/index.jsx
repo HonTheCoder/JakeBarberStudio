@@ -8,19 +8,21 @@ export const Icon = ({ name, size = 22, style: s = {} }) => (
 
 export const Badge = ({ status }) => {
   const map = {
-    VIP:            { bg: "#fed65b", color: "#735c00" },
-    Regular:        { bg: "#f0eded", color: "#444748" },
-    New:            { bg: "#e4e2e1", color: "#1b1c1c" },
-    Completed:      { bg: "#f0eded", color: "#1b1c1c" },
-    Refunded:       { bg: "#ffdad6", color: "#ba1a1a" },
-    "in-stock":     { bg: "#dcfce7", color: "#166534" },
-    "low-stock":    { bg: "#fed65b", color: "#735c00" },
-    "out-of-stock": { bg: "#ffdad6", color: "#ba1a1a" },
-    "Low Level":    { bg: "#fed65b", color: "#735c00" },
-    Adjusted:       { bg: "#f0eded", color: "#444748" },
-    Pending:        { bg: "#e4e2e1", color: "#1b1c1c" },
+    VIP:            { bg: "var(--badge-vip-bg)",     color: "var(--badge-vip-fg)"     },
+    Regular:        { bg: "var(--badge-neutral-bg)", color: "var(--badge-neutral-fg)" },
+    New:            { bg: "var(--badge-new-bg)",     color: "var(--badge-new-fg)"     },
+    Completed:      { bg: "var(--badge-neutral-bg)", color: "var(--badge-neutral-fg)" },
+    Refunded:       { bg: "var(--badge-error-bg)",   color: "var(--badge-error-fg)"   },
+    "in-stock":     { bg: "var(--badge-success-bg)", color: "var(--badge-success-fg)" },
+    "low-stock":    { bg: "var(--badge-warning-bg)", color: "var(--badge-warning-fg)" },
+    "out-of-stock": { bg: "var(--badge-error-bg)",   color: "var(--badge-error-fg)"   },
+    "Low Level":    { bg: "var(--badge-warning-bg)", color: "var(--badge-warning-fg)" },
+    Adjusted:       { bg: "var(--badge-neutral-bg)", color: "var(--badge-neutral-fg)" },
+    Pending:        { bg: "var(--badge-new-bg)",     color: "var(--badge-new-fg)"     },
+    Active:         { bg: "var(--badge-success-bg)", color: "var(--badge-success-fg)" },
+    Inactive:       { bg: "var(--badge-neutral-bg)", color: "var(--badge-neutral-fg)" },
   };
-  const { bg = "#f0eded", color = "#444748" } = map[status] || {};
+  const { bg = "var(--badge-neutral-bg)", color = "var(--badge-neutral-fg)" } = map[status] || {};
   return (
     <span style={{ background: bg, color, padding: "3px 12px", borderRadius: 999, fontSize: 11, fontFamily: "Geist, sans-serif", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
       {status}

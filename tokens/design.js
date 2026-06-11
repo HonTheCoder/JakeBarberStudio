@@ -1,27 +1,29 @@
 // ── Design Tokens — Luxury Grooming Suite ─────────────────────────────────────
+// Values are CSS custom properties so dark-mode overrides cascade into
+// every inline style that references C.* across all pages.
 export const C = {
-  surface: "#fcf9f8",
-  surfaceDim: "#dcd9d9",
-  surfaceLow: "#f6f3f2",
-  surfaceContainer: "#f0eded",
-  surfaceHigh: "#eae7e7",
-  surfaceHighest: "#e4e2e1",
-  surfaceLowest: "#ffffff",
-  primary: "#000000",
-  onPrimary: "#ffffff",
-  primaryContainer: "#1c1b1b",
-  onPrimaryContainer: "#858383",
-  secondary: "#735c00",
-  secondaryContainer: "#fed65b",
-  onSecondary: "#ffffff",
-  onSurface: "#1b1c1c",
-  onSurfaceVariant: "#444748",
-  outline: "#747878",
-  outlineVariant: "#c4c7c7",
-  error: "#ba1a1a",
-  errorContainer: "#ffdad6",
-  inverseSurface: "#303030",
-  inverseOnSurface: "#f3f0f0",
+  surface:            "var(--c-surface)",
+  surfaceDim:         "var(--c-surface-dim)",
+  surfaceLow:         "var(--c-surface-low)",
+  surfaceContainer:   "var(--c-surface-container)",
+  surfaceHigh:        "var(--c-surface-high)",
+  surfaceHighest:     "var(--c-surface-highest)",
+  surfaceLowest:      "var(--c-surface-lowest)",
+  primary:            "var(--c-primary)",
+  onPrimary:          "var(--c-on-primary)",
+  primaryContainer:   "var(--c-primary-container)",
+  onPrimaryContainer: "var(--c-on-primary-container)",
+  secondary:          "var(--c-secondary)",
+  secondaryContainer: "var(--c-secondary-container)",
+  onSecondary:        "var(--c-on-secondary)",
+  onSurface:          "var(--c-on-surface)",
+  onSurfaceVariant:   "var(--c-on-surface-variant)",
+  outline:            "var(--c-outline)",
+  outlineVariant:     "var(--c-outline-variant)",
+  error:              "var(--c-error)",
+  errorContainer:     "var(--c-error-container)",
+  inverseSurface:     "var(--c-inverse-surface)",
+  inverseOnSurface:   "var(--c-inverse-on-surface)",
 };
 
 // All nav items — each has an optional `roles` array.
@@ -50,7 +52,7 @@ export const getNavItems = (role) =>
 export const navItems = ALL_NAV_ITEMS;
 
 export const pageMeta = {
-  dashboard:  { title: "Dashboard",  subtitle: "Welcome back, Managing Director"                   },
+  dashboard:  { title: "Dashboard",  subtitle: ""                                                   },
   stylists:   { title: "Stylists",   subtitle: "Manage your team"                                  },
   clients:    { title: "Clients",    subtitle: "Your client records and history"                    },
   inventory:  { title: "Inventory",  subtitle: "Curate and monitor your premium grooming supplies"  },

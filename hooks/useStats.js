@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import { useTransactions, useStylists, useClients, useSettings } from "./useFirestore";
+import { useTransactions, useStylists, useClients } from "./useFirestore";
+import { useSettingsContext } from "../context/useSettingsContext";
+import { fmt, toNum, parseDate } from "../utils/currency";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    useStats — derives all live KPIs, chart data, and breakdowns from Firestore.
@@ -9,7 +11,7 @@ export const useStats = () => {
   const { data: transactions, loading: txLoading } = useTransactions();
   const { data: stylists,     loading: stLoading  } = useStylists();
   const { data: clients,      loading: clLoading  } = useClients();
-  const { settings }                                 = useSettings();
+  const { settings }                                 = useSettingsContext();
 
   const loading = txLoading || stLoading || clLoading;
 
@@ -40,9 +42,6 @@ export const useStats = () => {
     const completed = transactions.filter(t => t.status === "Completed");
     const refunded  = transactions.filter(t => t.status === "Refunded");
 
-    /* ── Helper: parse "$85" → 85 ────────────────────────────────────────── */
-    const toNum = v => parseFloat(String(v ?? "0").replace(/[$,]/g, "")) || 0;
-
     /* ── Totals ───────────────────────────────────────────────────────────── */
     const totalRevenue = completed.reduce((s, t) => s + toNum(t.amount), 0);
     const avgTicket    = completed.length ? totalRevenue / completed.length : 0;
@@ -58,14 +57,6 @@ export const useStats = () => {
     weekStart.setDate(now.getDate() - dayOfWeek);
     weekStart.setHours(0, 0, 0, 0);
 
-    // Try to match "Oct 14, 3:22 PM" style dates stored in Firestore
-    const parseDate = str => {
-      if (!str) return null;
-      // If Firestore Timestamp
-      if (str?.toDate) return str.toDate();
-      const d = new Date(str);
-      return isNaN(d) ? null : d;
-    };
 
     const dailyRevenue = completed
       .filter(t => {
@@ -156,13 +147,15 @@ export const useStats = () => {
         const perf = byBarber[key] ?? { revenue: 0, clients: 0 };
         return {
           ...s,
-          revenue:  `$${perf.revenue.toLocaleString()}`,
+          _revenue: perf.revenue,
+          revenue:  fmt(perf.revenue),
           bookings: perf.clients,
           tier:     perf.revenue >= 10000 ? "Top Tier" : perf.revenue >= 5000 ? "Steady" : "Rising",
         };
       })
-      .sort((a, b) => toNum(b.revenue) - toNum(a.revenue))
-      .slice(0, 3);
+      .sort((a, b) => b._revenue - a._revenue)
+      .slice(0, 3)
+      .map(({ _revenue, ...rest }) => rest);
 
     /* ── Month-on-month growth ────────────────────────────────────────────── */
     const monthlyGrowth = revenueData.map((d, i, arr) => ({
@@ -232,8 +225,9 @@ export const useStats = () => {
       // Raw
       transactions,
       completed,
+      monthlyTarget,
     };
   }, [transactions, stylists, clients, monthlyTarget]);
 
-  return { stats, loading };
+  return { stats, loading, clients, stylists };
 };

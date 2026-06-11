@@ -1,74 +1,6 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { C } from "../tokens/design";
 import { Icon, Input } from "./ui";
-import { useInventory, useTransactions } from "../hooks/useFirestore";
-
-const LOW_STOCK_THRESHOLD = 5;
-
-/* Build live notifications from Firestore inventory + transactions */
-const useNotifications = () => {
-  const { data: inventory    = [] } = useInventory();
-  const { data: transactions = [] } = useTransactions();
-
-  return useMemo(() => {
-    const notifs = [];
-
-    // Out-of-stock alerts (highest priority)
-    inventory
-      .filter(p => p.status === "out-of-stock" || p.stock === 0)
-      .forEach(p => notifs.push({
-        id:    `oos-${p.id}`,
-        icon:  "remove_shopping_cart",
-        color: C.error,
-        bg:    "#fef2f2",
-        title: "Out of stock",
-        body:  `${p.name} has run out. Reorder needed.`,
-        time:  "Inventory",
-      }));
-
-    // Low-stock alerts
-    inventory
-      .filter(p => p.status === "low-stock" || (p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD))
-      .forEach(p => notifs.push({
-        id:    `low-${p.id}`,
-        icon:  "warning",
-        color: "#d97706",
-        bg:    "#fef3c7",
-        title: "Low stock alert",
-        body:  `${p.name} is down to ${p.stock} unit${p.stock === 1 ? "" : "s"}.`,
-        time:  "Inventory",
-      }));
-
-    // Latest 3 completed sales
-    const recentSales = [...transactions]
-      .filter(t => t.status === "Completed")
-      .sort((a, b) => {
-        const ta = a.createdAt?.toDate?.() ?? new Date(a.date ?? 0);
-        const tb = b.createdAt?.toDate?.() ?? new Date(b.date ?? 0);
-        return tb - ta;
-      })
-      .slice(0, 3);
-
-    recentSales.forEach(t => {
-      const d = t.createdAt?.toDate?.() ?? new Date(t.date ?? 0);
-      const diff = Date.now() - d;
-      const mins = Math.floor(diff / 60000);
-      const hrs  = Math.floor(diff / 3600000);
-      const time = mins < 1 ? "Just now" : hrs < 1 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : t.date ?? "";
-      notifs.push({
-        id:    `sale-${t.id ?? t.txnId}`,
-        icon:  "receipt",
-        color: C.primary,
-        bg:    C.surfaceLow,
-        title: "New sale recorded",
-        body:  `${t.amount ?? ""} transaction${t.barber ? ` by ${t.barber}` : ""}${t.client ? ` · ${t.client}` : ""}.`,
-        time,
-      });
-    });
-
-    return notifs;
-  }, [inventory, transactions]);
-};
 
 /* Shared hook: closes a floating panel when clicking outside its ref */
 const useOutsideClick = (ref, isOpen, onClose) => {
@@ -81,7 +13,19 @@ const useOutsideClick = (ref, isOpen, onClose) => {
   }, [isOpen, onClose]);
 };
 
-const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout }) => {
+const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout, notifications = [] }) => {
+  const [visible, setVisible] = useState(true);
+  const [displayed, setDisplayed] = useState({ title, subtitle });
+
+  useEffect(() => {
+    setVisible(false);
+    const t = setTimeout(() => {
+      setDisplayed({ title, subtitle });
+      setVisible(true);
+    }, 120);
+    return () => clearTimeout(t);
+  }, [title, subtitle]);
+
   const initials = (displayName || userEmail || "")
     .split(/[\s@]/)[0]
     .split(/[._]/)
@@ -92,7 +36,6 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
   const roleLabel = role === "admin" ? "Admin" : "Barber";
 
   /* ── Notifications state ── */
-  const notifications = useNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
   const [read,      setRead]      = useState(new Set());
   const notifRef = useRef(null);
@@ -125,11 +68,11 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
               <Icon name="menu" size={20} />
             </button>
           )}
-          <div>
+          <div style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(6px)", transition: "opacity 0.2s ease, transform 0.2s ease" }}>
             <h2 style={{ fontFamily: "Geist", fontSize: isMobile ? 26 : 40, fontWeight: 500, letterSpacing: "-0.02em", color: C.primary, lineHeight: 1.1 }}>
-              {title}
+              {displayed.title}
             </h2>
-            {!isMobile && <p style={{ color: C.onSurfaceVariant, fontSize: 14, marginTop: 6 }}>{subtitle}</p>}
+            {!isMobile && <p style={{ color: C.onSurfaceVariant, fontSize: 14, marginTop: 6 }}>{displayed.subtitle}</p>}
           </div>
         </div>
 

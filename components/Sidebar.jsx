@@ -69,7 +69,7 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerO
       </div>
 
       {/* Nav Items — filtered by role */}
-      <nav style={{ flex: 1, overflow: "hidden" }}>
+      <nav style={{ flex: 1, overflow: "hidden", padding: (collapsed && !isMobile) ? "0 12px" : "0 12px" }}>
         {visibleItems.map(item => {
           const isActive = active === item.id;
           return (
@@ -78,11 +78,12 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerO
               onClick={() => setActive(item.id)}
               style={{
                 width: "100%", display: "flex", alignItems: "center", gap: 14,
-                padding: (collapsed && !isMobile) ? "12px 0" : "11px 28px",
+                padding: (collapsed && !isMobile) ? "11px 0" : "11px 16px",
                 justifyContent: (collapsed && !isMobile) ? "center" : "flex-start",
-                color: isActive ? C.primary : C.onSurfaceVariant,
-                background: isActive ? C.surfaceLow : "transparent",
-                borderRight: isActive ? `2px solid ${C.secondaryContainer}` : "2px solid transparent",
+                color: isActive ? C.onPrimary : C.onSurfaceVariant,
+                background: isActive ? C.primary : "transparent",
+                borderRadius: 12,
+                marginBottom: 2,
                 transition: "all 0.2s",
                 fontFamily: "Geist", fontSize: 11, fontWeight: 600,
                 letterSpacing: "0.1em", textTransform: "uppercase",

@@ -25,6 +25,7 @@ export const AuthProvider = ({ children }) => {
           setDisplayName(fetchedName);
         } catch {
           setRole("barber");
+          setDisplayName(null);
         }
         setUser(u);
         // Clear any pending MFA state once fully signed in

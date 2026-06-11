@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { C } from "../tokens/design";
 import { Icon, SecondaryBtn, ErrorBanner } from "../components/ui";
 import { useStylists, useTransactions } from "../hooks/useFirestore";
-import { EditStylistModal, DeleteStylistModal } from "../components/modals";
+import { fmt } from "../utils/currency";
+import { EditStylistModal, DeleteStylistModal, AddStylistModal } from "../components/modals";
 import useIsMobile from "../hooks/useIsMobile";
 
 /* ── Status badge ────────────────────────────────────────────────────────── */
@@ -50,7 +51,7 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.outlineVariant}20` }}>
       {[
         { icon: "receipt",  label: "Sales",   value: stylist.bookings ?? 0 },
-        { icon: "payments", label: "Revenue", value: stylist.revenue  ?? "$0" },
+        { icon: "payments", label: "Revenue", value: fmt(stylist.revenue ?? 0) },
       ].map(s => (
         <div key={s.label} style={{ padding: "16px 24px", borderRight: s.label === "Bookings" ? `1px solid ${C.outlineVariant}20` : "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -131,13 +132,14 @@ const StylistsPage = ({ search = "" }) => {
       return {
         ...s,
         bookings: stats.bookings,
-        revenue:  `$${stats.revenue.toLocaleString()}`,
+        revenue:  stats.revenue,
       };
     }),
   [stylists, barberStats]);
 
   const [editTarget, setEditTarget] = useState(null);
   const [delTarget,  setDelTarget]  = useState(null);
+  const [showAdd,    setShowAdd]    = useState(false);
   const [filter,     setFilter]     = useState("All");
 
   const filters = ["All", "Active", "Inactive"];
@@ -153,7 +155,7 @@ const StylistsPage = ({ search = "" }) => {
     );
 
   const active    = enriched.filter(s => s.status === "Active").length;
-  const totalRev  = enriched.reduce((sum, s) => sum + parseFloat((s.revenue ?? "$0").replace(/[$,]/g, "")), 0);
+  const totalRev  = enriched.reduce((sum, s) => sum + (s.revenue ?? 0), 0);
 
   if (error) return <ErrorBanner message={error} />;
 
@@ -183,7 +185,7 @@ const StylistsPage = ({ search = "" }) => {
         {[
           { icon: "content_cut",  label: "Total Stylists",  value: stylists.length },
           { icon: "check_circle", label: "Active",          value: active },
-          { icon: "payments",     label: "Team Revenue",    value: `$${totalRev.toLocaleString()}` },
+          { icon: "payments",     label: "Team Revenue",    value: fmt(totalRev) },
         ].map(k => (
           <div key={k.label} className="card" style={{ padding: "20px 24px", display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{ width: 42, height: 42, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -215,10 +217,34 @@ const StylistsPage = ({ search = "" }) => {
       {loading ? (
         <div style={{ textAlign: "center", padding: 80, color: C.onSurfaceVariant, fontFamily: "Geist" }}>Loading stylists…</div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 80 }}>
-          <Icon name="content_cut" size={40} style={{ color: C.outlineVariant, marginBottom: 16 }} />
-          <p style={{ fontFamily: "Geist", fontSize: 15, color: C.onSurfaceVariant }}>No stylists found</p>
-          <p style={{ fontSize: 13, color: C.outlineVariant, marginTop: 6 }}>Add your first stylist to get started</p>
+        <div style={{ textAlign: "center", padding: "64px 40px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ width: 72, height: 72, borderRadius: 20, background: `${C.secondary}18`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+            <Icon name="content_cut" size={36} style={{ color: C.secondary }} />
+          </div>
+          <p style={{ fontFamily: "Geist", fontSize: 20, fontWeight: 600, color: C.primary, marginBottom: 10 }}>
+            {filter === "All" ? "No stylists yet" : `No ${filter.toLowerCase()} stylists`}
+          </p>
+          <p style={{ fontFamily: "Geist", fontSize: 14, color: C.onSurfaceVariant, marginBottom: 32, maxWidth: 360 }}>
+            {filter === "All"
+              ? "Stylist profiles are created automatically when you add a barber account in Settings."
+              : "Try changing the filter to see all stylists."}
+          </p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("navigate-settings"))}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "12px 28px", borderRadius: 14,
+              background: C.primary, color: "#fff",
+              fontFamily: "Geist", fontSize: 13, fontWeight: 600,
+              letterSpacing: "0.04em", border: "none", cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+            onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+          >
+            <Icon name="settings" size={18} style={{ color: "#fff" }} />
+            Go to Staff Accounts
+          </button>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: isMobile ? 16 : 24 }}>
@@ -229,6 +255,7 @@ const StylistsPage = ({ search = "" }) => {
       )}
 
       {/* Modals */}
+      {showAdd      && <AddStylistModal                      onClose={() => setShowAdd(null)} />}
       {editTarget && <EditStylistModal   stylist={editTarget} onClose={() => setEditTarget(null)} />}
       {delTarget  && <DeleteStylistModal stylist={delTarget}  onClose={() => setDelTarget(null)} />}
     </div>

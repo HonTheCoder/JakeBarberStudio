@@ -2,15 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import {
   collection, onSnapshot, addDoc, updateDoc,
   deleteDoc, doc, serverTimestamp, query, orderBy,
-  getDocs, setDoc, getDoc, writeBatch,
+  getDocs, setDoc, writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import * as mockModule from "../data/mockData";
 
 // Mock data is only used in development so it never ships to production.
 // Vite statically replaces import.meta.env.DEV with false in prod builds,
 // which lets the bundler tree-shake the entire mockData module out.
 const IS_DEV = import.meta.env.DEV;
-import * as mockModule from "../data/mockData";
 const mock = IS_DEV ? mockModule : {};
 
 // In prod the fallback is always [] so Firestore errors surface as empty
@@ -25,6 +25,47 @@ const isOfflineError = err =>
   err?.message?.toLowerCase().includes("offline") ||
   err?.message?.toLowerCase().includes("transport") ||
   err?.message?.toLowerCase().includes("disconnected");
+
+// ── Singleton subscription registry ──────────────────────────────────────────
+// React StrictMode mounts → unmounts → remounts every component in dev.
+// This causes two concurrent onSnapshot calls on the same collection before
+// the first cleanup fires, which trips a Firestore internal assertion.
+//
+// Solution: track active subscriptions by key. If a subscription for this
+// key already exists, reuse it (ref-count). Only open a new listener when
+// the count drops to zero (i.e. all consumers have unmounted).
+const registry = new Map();
+// registry entry shape: { unsub, refCount, listeners: Set<(snap) => void>, errorListeners: Set }
+
+const subscribe = (key, ref, onData, onErr) => {
+  if (!registry.has(key)) {
+    const listeners      = new Set();
+    const errorListeners = new Set();
+
+    const unsub = onSnapshot(
+      ref,
+      snap  => { listeners.forEach(fn => fn(snap));  },
+      err   => { errorListeners.forEach(fn => fn(err)); }
+    );
+
+    registry.set(key, { unsub, refCount: 0, listeners, errorListeners });
+  }
+
+  const entry = registry.get(key);
+  entry.refCount++;
+  entry.listeners.add(onData);
+  entry.errorListeners.add(onErr);
+
+  return () => {
+    entry.listeners.delete(onData);
+    entry.errorListeners.delete(onErr);
+    entry.refCount--;
+    if (entry.refCount <= 0) {
+      entry.unsub();
+      registry.delete(key);
+    }
+  };
+};
 
 // Generic real-time collection hook with offline fallback.
 // Hook shape (useState/useRef/useEffect order) is always fixed — no conditional hooks.
@@ -50,7 +91,10 @@ const useCollection = (collectionName, orderField, fallbackData) => {
       ? query(collection(db, collectionName), orderBy(orderField, "desc"))
       : collection(db, collectionName);
 
-    const unsub = onSnapshot(
+    const key = `${collectionName}::${orderField ?? ""}`;
+
+    const unsubscribe = subscribe(
+      key,
       ref,
       snap => {
         if (!active) return;
@@ -76,7 +120,7 @@ const useCollection = (collectionName, orderField, fallbackData) => {
     return () => {
       active = false;
       clearTimeout(timerRef.current);
-      unsub();
+      unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionName, orderField]);
@@ -124,19 +168,18 @@ export const useSettings = () => {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    let active = true;
-    getDoc(SETTINGS_DOC)
-      .then(snap => {
-        if (!active) return;
+    const unsub = onSnapshot(
+      SETTINGS_DOC,
+      snap => {
         setSettings(snap.exists() ? snap.data() : null);
         setLoading(false);
-      })
-      .catch(() => {
-        if (!active) return;
+      },
+      () => {
         setSettings(null);
         setLoading(false);
-      });
-    return () => { active = false; };
+      }
+    );
+    return unsub;
   }, []);
 
   return { settings, loading };
@@ -153,7 +196,7 @@ export const clearAllTransactions = async () => {
 
   const movSnap = await getDocs(collection(db, "stockMovement"));
   const batch2 = writeBatch(db);
-  movSnap.docs.forEach(d => batch2.delete(d.ref));
+  movSnap.docs.forEach(d => batch2.delete(d.ref))
   await batch2.commit();
 };
 

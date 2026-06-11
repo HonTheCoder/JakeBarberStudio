@@ -5,12 +5,12 @@ import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
 import { Badge, Icon, PrimaryBtn, SecondaryBtn, ErrorBanner } from "../components/ui";
 import { AddClientModal, EditClientModal, DeleteClientModal, NewClientQRModal } from "../components/modals";
-import { useClients, updateClient } from "../hooks/useFirestore";
+import QRScannerModal from "./QRScannerModal";
+import { useClients } from "../hooks/useFirestore";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────────────────────────────── */
-const toNum = v => parseFloat(String(v ?? "0").replace(/[$,]/g, "")) || 0;
 
 const getInitials = name =>
   (name ?? "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -214,7 +214,7 @@ const BrandedQRCard = ({ client }) => {
         <p style={{ fontFamily: "Geist", fontSize: 15, fontWeight: 700, color: C.primary, marginTop: 14 }}>
           {client.name}
         </p>
-        <p style={{ fontFamily: "Geist", fontSize: 10, color: C.onSurfaceVariant, marginTop: 3, fontFamily: "monospace" }}>
+        <p style={{ fontFamily: "monospace", fontSize: 10, color: C.onSurfaceVariant, marginTop: 3 }}>
           {(client.id ?? "000").slice(0, 12).toUpperCase()}
         </p>
 
@@ -566,6 +566,7 @@ const ClientsPage = ({ search = "" }) => {
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [showAdd,        setShowAdd]        = useState(false);
   const [newClientForQR, setNewClientForQR] = useState(null); // shown after add
+  const [showScanner,    setShowScanner]    = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("All");
@@ -588,6 +589,7 @@ const ClientsPage = ({ search = "" }) => {
   }, [clients]);
 
   // Reset to page 1 when filters change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [q, statusFilter, sortMode]);
 
   // Filtered + sorted
@@ -646,14 +648,73 @@ const ClientsPage = ({ search = "" }) => {
 
   if (error) return <ErrorBanner message={error} />;
 
+  /* ── True zero-data empty state (no clients at all) ── */
+  if (!loading && clients.length === 0) {
+    return (
+      <div style={{ animation: "fadeUp 0.4s ease" }}>
+        {showAdd && (
+          <AddClientModal
+            onClose={() => setShowAdd(false)}
+            onSaved={(newClient) => { setShowAdd(false); setNewClientForQR(newClient); }}
+          />
+        )}
+        {newClientForQR && (
+          <NewClientQRModal client={newClientForQR} onClose={() => setNewClientForQR(null)} />
+        )}
+        <div className="card" style={{
+          padding: "80px 40px", textAlign: "center",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 0,
+        }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: 20,
+            background: `${C.secondary}18`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 24,
+          }}>
+            <Icon name="group" size={36} style={{ color: C.secondary }} />
+          </div>
+          <p style={{ fontFamily: "Geist", fontSize: 20, fontWeight: 600, color: C.primary, marginBottom: 10 }}>
+            No clients yet
+          </p>
+          <p style={{ fontFamily: "Geist", fontSize: 14, color: C.onSurfaceVariant, marginBottom: 32, maxWidth: 340 }}>
+            Add your first client to start tracking visits, preferences, and loyalty rewards.
+          </p>
+          <button
+            onClick={() => setShowAdd(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "12px 28px", borderRadius: 14,
+              background: C.primary, color: "#fff",
+              fontFamily: "Geist", fontSize: 13, fontWeight: 600,
+              letterSpacing: "0.04em", border: "none", cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+            onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+          >
+            <Icon name="person_add" size={18} style={{ color: "#fff" }} />
+            Add your first client
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }} onClick={() => {}}>
 
       {/* ── Modals ── */}
+      {showScanner && (
+        <QRScannerModal
+          clients={clients}
+          onFound={(client) => { setShowScanner(false); setDetailClient(client); }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       {showAdd && (
         <AddClientModal
           onClose={() => setShowAdd(false)}
-          onSaved={(client) => { setShowAdd(false); setNewClientForQR(client); }}
+          onSaved={(newClient) => { setShowAdd(false); setNewClientForQR(newClient); }}
         />
       )}
       {editTarget    && <EditClientModal   client={editTarget}   onClose={() => setEditTarget(null)} />}
@@ -734,6 +795,26 @@ const ClientsPage = ({ search = "" }) => {
           ))}
         </div>
 
+        {/* Scan QR button */}
+        <button
+          onClick={() => setShowScanner(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "9px 18px", borderRadius: 12,
+            background: C.surfaceLow,
+            border: `1.5px solid ${C.outlineVariant}40`,
+            fontFamily: "Geist", fontSize: 11, fontWeight: 600,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            color: C.onSurfaceVariant,
+            transition: "all 0.15s",
+          }}
+          onMouseOver={e => { e.currentTarget.style.background = C.surfaceHigh; e.currentTarget.style.color = C.primary; }}
+          onMouseOut={e => { e.currentTarget.style.background = C.surfaceLow; e.currentTarget.style.color = C.onSurfaceVariant; }}
+        >
+          <Icon name="qr_code_scanner" size={15} />
+          {!isMobile && "Scan QR"}
+        </button>
+
         {/* Add client — admin only */}
         {isAdmin && (
           <PrimaryBtn icon="person_add" onClick={() => setShowAdd(true)}>
@@ -742,14 +823,39 @@ const ClientsPage = ({ search = "" }) => {
         )}
       </div>
 
-      {/* ── Empty state ── */}
+      {/* ── Empty state (search/filter yielded nothing) ── */}
       {filtered.length === 0 && (
-        <div className="card" style={{ padding: "60px 20px", textAlign: "center" }}>
-          <Icon name="search_off" size={40} style={{ color: C.outlineVariant, display: "block", margin: "0 auto 12px" }} />
-          <p style={{ fontFamily: "Geist", fontSize: 15, fontWeight: 600, color: C.primary, marginBottom: 6 }}>No clients found</p>
-          <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant }}>
-            Try adjusting your search or filters.
+        <div className="card" style={{ padding: "64px 40px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: 16,
+            background: C.surfaceLow,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 20,
+          }}>
+            <Icon name="search_off" size={30} style={{ color: C.outlineVariant }} />
+          </div>
+          <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>No clients found</p>
+          <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant, marginBottom: 28, maxWidth: 320 }}>
+            Try adjusting your search or filters, or add a new client.
           </p>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAdd(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "10px 24px", borderRadius: 12,
+                background: C.primary, color: "#fff",
+                fontFamily: "Geist", fontSize: 12, fontWeight: 600,
+                letterSpacing: "0.04em", border: "none", cursor: "pointer",
+                transition: "opacity 0.15s",
+              }}
+              onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+              onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+            >
+              <Icon name="person_add" size={16} style={{ color: "#fff" }} />
+              Add Client
+            </button>
+          )}
         </div>
       )}
 

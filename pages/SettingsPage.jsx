@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { C } from "../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../components/ui";
 import useIsMobile from "../hooks/useIsMobile";
+import { useSettingsContext } from "../context/useSettingsContext";
 import {
-  useSettings, saveSettings,
+  saveSettings,
   clearAllTransactions, resetInventoryStock,
   deleteClientsByFilter, useClients,
   addStylist, updateStylist, deleteStylist,
@@ -15,7 +16,7 @@ import { useTOTPStatus, startTOTPEnrollment, finishTOTPEnrollment, unenrollTOTP 
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore";
-import { db, auth as primaryAuth } from "../firebase";
+import { db } from "../firebase";
 
 /* ── Shared primitives ───────────────────────────────────────────────────── */
 const Section = ({ title, subtitle, children }) => (
@@ -283,7 +284,7 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
           status:      "Active",
           specialties: [],
           bookings:    0,
-          revenue:     "$0",
+          revenue:     "₱0",
           initials,
         });
       }
@@ -355,38 +356,7 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
           })()
         ) : (
           <>
-            {/* App Role selector — most important field, shown first */}
-            <div style={{ marginBottom: 22 }}>
-              <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 10 }}>
-                Access Role *
-              </label>
-              <div style={{ display: "flex", gap: 10 }}>
-                {[
-                  { value: "barber", label: "Barber", icon: "content_cut", desc: "Schedule & clients only" },
-                ].map(opt => {
-                  const sel = form.appRole === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(f => ({ ...f, appRole: opt.value }))}
-                      style={{
-                        flex: 1, padding: "14px 12px", borderRadius: 12, textAlign: "left",
-                        border: `2px solid ${sel ? C.primary : C.outlineVariant + "50"}`,
-                        background: sel ? C.surfaceLow : "transparent",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <Icon name={opt.icon} size={16} style={{ color: sel ? C.primary : C.onSurfaceVariant }} />
-                        <span style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: sel ? C.primary : C.onSurfaceVariant }}>{opt.label}</span>
-                        {sel && <Icon name="check_circle" size={14} style={{ color: C.primary, marginLeft: "auto" }} />}
-                      </div>
-                      <span style={{ fontSize: 11, color: C.onSurfaceVariant }}>{opt.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+
 
             {/* Name */}
             <div style={{ marginBottom: 16 }}>
@@ -881,7 +851,7 @@ const TOTPRemoveModal = ({ onClose }) => {
 
 const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   const isMobile = useIsMobile();
-  const { settings, loading: settingsLoading } = useSettings();
+  const { settings, loading: settingsLoading } = useSettingsContext();
 
   // Stable refs so the hydrate useEffect doesn't need these in its dep array
   const onDarkModeChangeRef   = useRef(onDarkModeChange);
@@ -929,22 +899,28 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     loadStaff();
   }, []);
 
-  // Hydrate other settings from Firestore once loaded
+  // Hydrate other settings from Firestore once loaded.
+  // setState calls here are intentional one-time seeding from a remote source,
+  // not a reactive loop — safe to suppress the lint rule for this block.
   useEffect(() => {
     if (!settings) return;
-    if (settings.shop)           setShop(s          => ({ ...s, ...settings.shop, currency: "PHP", timezone: "Asia/Manila" }));
-    if (settings.notifs)         setNotifs(n        => ({ ...n,          ...settings.notifs }));
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (settings.shop) {
+      setShop(s => ({ ...s, ...settings.shop, currency: "PHP", timezone: "Asia/Manila" }));
+    }
+    if (settings.notifs)                 setNotifs(n => ({ ...n, ...settings.notifs }));
     if (settings.sessionTimeout != null) setSessionTimeout(settings.sessionTimeout);
-    if (settings.darkMode      != null) {
+    if (settings.darkMode != null) {
       setDarkMode(settings.darkMode);
       onDarkModeChangeRef.current?.(settings.darkMode);
-      try { localStorage.setItem("darkMode", String(settings.darkMode)); } catch {}
+      try { localStorage.setItem("darkMode", String(settings.darkMode)); } catch { /* noop */ }
     }
-    if (settings.compactNav    != null) {
+    if (settings.compactNav != null) {
       setCompactNav(settings.compactNav);
       onCompactNavChangeRef.current?.(settings.compactNav);
-      try { localStorage.setItem("compactNav", String(settings.compactNav)); } catch {}
+      try { localStorage.setItem("compactNav", String(settings.compactNav)); } catch { /* noop */ }
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [settings]);
 
   const [savedSnapshot, setSavedSnapshot] = useState(null);
@@ -958,6 +934,8 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     const cn = savedSnapshot.compactNav;
     setDarkMode(dm);   onDarkModeChange?.(dm);
     setCompactNav(cn); onCompactNavChange?.(cn);
+    try { localStorage.setItem("darkMode",  String(dm)); } catch { /* noop */ }
+    try { localStorage.setItem("collapsed", String(cn)); } catch { /* noop */ }
   };
 
   const setShopField = useCallback((k) => (e) => setShop(s => ({ ...s, [k]: e.target.value })), []);
@@ -966,14 +944,14 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     const next = !darkMode;
     setDarkMode(next);
     onDarkModeChange?.(next);
-    try { localStorage.setItem("darkMode", String(next)); } catch {}
+    try { localStorage.setItem("darkMode", String(next)); } catch { /* noop */ }
   };
 
   const handleCompactToggle = () => {
     const next = !compactNav;
     setCompactNav(next);
     onCompactNavChange?.(next);
-    try { localStorage.setItem("compactNav", String(next)); } catch {}
+    try { localStorage.setItem("compactNav", String(next)); } catch { /* noop */ }
   };
 
   // ── Browser notification permission ────────────────────────────────────

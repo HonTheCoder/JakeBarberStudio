@@ -16,3 +16,14 @@ export const fmt = (n, compact = false) => {
   }
   return `${CURRENCY_SYMBOL}${num.toLocaleString()}`;
 };
+
+/** Strip ₱ / $ / commas and parse to float. Returns 0 on invalid input. */
+export const toNum = v => parseFloat(String(v ?? "0").replace(/[₱$,]/g, "")) || 0;
+
+/** Parse a Firestore Timestamp, ISO string, or Date to a JS Date. Returns null on failure. */
+export const parseDate = str => {
+  if (!str) return null;
+  if (str?.toDate) return str.toDate();
+  const d = new Date(str);
+  return isNaN(d) ? null : d;
+};

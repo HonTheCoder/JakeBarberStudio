@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,7 +7,7 @@ import { C } from "../tokens/design";
 import { KpiCard, SectionTitle, SecondaryBtn } from "../components/ui";
 import { useStats } from "../hooks/useStats";
 import useIsMobile from "../hooks/useIsMobile";
-import { fmt } from "../utils/currency";
+import { fmt, toNum, parseDate } from "../utils/currency";
 
 /* ── Skeleton ────────────────────────────────────────────────────────────── */
 const Shimmer = ({ w = "100%", h = 24, r = 8 }) => (
@@ -127,15 +127,6 @@ const ReportsPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return (
-    <div style={{ animation: "fadeUp 0.4s ease" }}>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 20, marginBottom: 40 }}>
-        {[1,2,3,4].map(i => <div key={i} className="card" style={{ padding: 24 }}><Shimmer h={16} /><Shimmer w="50%" h={28} r={6} /></div>)}
-      </div>
-      <div className="card" style={{ padding: 32, marginBottom: 28 }}><Shimmer h={280} r={12} /></div>
-    </div>
-  );
-
   const {
     totalRevenue = 0,
     txCount = 0,
@@ -153,7 +144,44 @@ const ReportsPage = () => {
     txTrendLabel = "--",
     txTrendPositive = true,
     refundTrend  = { label: "0 refunds", positive: true },
+    monthlyTarget = 0,
   } = stats ?? {};
+
+  const quarterlyData = useMemo(() => {
+    const qs = ["Q1","Q2","Q3","Q4"];
+    const completed = (transactions ?? []).filter(t => t.status === "Completed");
+    const byQ = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+    completed.forEach(t => {
+      const d = parseDate(t.date);
+      if (!d) return;
+      const q = qs[Math.floor(d.getMonth() / 3)];
+      byQ[q] += toNum(t.amount);
+    });
+    const target = monthlyTarget * 3;
+    return qs.map(q => ({ month: q, revenue: byQ[q], target }));
+  }, [transactions, monthlyTarget]);
+
+  const activeRevenueData = revPeriod === "Quarterly" ? quarterlyData : revenueData;
+
+  if (loading) return (
+    <div style={{ animation: "fadeUp 0.4s ease" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 40 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} className="card" style={{ padding: 32 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+              <Shimmer w={46} h={46} r={14} />
+              <Shimmer w={48} h={14} r={6} />
+            </div>
+            <Shimmer w="60%" h={12} r={6} />
+            <div style={{ marginTop: 10 }}>
+              <Shimmer w="75%" h={32} r={6} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ padding: 32, marginBottom: 28 }}><Shimmer h={280} r={12} /></div>
+    </div>
+  );
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
@@ -186,7 +214,7 @@ const ReportsPage = () => {
               </div>
             </div>
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
-              <AreaChart data={revenueData}>
+              <AreaChart data={activeRevenueData}>
                 <defs>
                   <linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor={C.primary} stopOpacity={0.08} />

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { C } from "../../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../ui";
+import { useToast } from "../../context/ToastContext";
 import {
   addClient, updateClient, deleteClient,
   addProduct, updateProduct, deleteProduct, addStockMovement,
@@ -21,7 +22,7 @@ const Overlay = ({ onClose, children }) => (
       padding: 16,
     }}
   >
-    <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 500 }}>
+    <div onClick={e => e.stopPropagation()} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
       {children}
     </div>
   </div>
@@ -290,6 +291,7 @@ export const NewClientQRModal = ({ client, onClose }) => {
 
 
 export const AddClientModal = ({ onClose, onSaved }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({
     // Basic
     name: "", phone: "", status: "New",
@@ -317,11 +319,12 @@ export const AddClientModal = ({ onClose, onSaved }) => {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       const resolvedHaircut = form.haircutStyle === "Custom / Other" ? (form.haircutCustom.trim() || "Custom") : form.haircutStyle;
       const resolvedBeard   = form.beardStyle   === "Custom / Other" ? (form.beardCustom.trim()   || "Custom") : form.beardStyle;
-      const docRef = await addClient({ ...form, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, visits: 0, spent: "$0" });
-      // Show QR step — pass the new client id back via onSaved
+      const docRef = await addClient({ ...form, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, visits: 0, spent: "₱0" });
+      success(`Client "${form.name.trim()}" added successfully`);
       onSaved({ ...form, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, id: docRef?.id ?? `tmp_${Date.now()}` });
     } catch (e) {
       setError(e.message);
+      toastError("Failed to add client — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -460,6 +463,7 @@ export const AddClientModal = ({ onClose, onSaved }) => {
 
 /* ─── Edit Client Modal ────────────────────────────────────────────────────── */
 export const EditClientModal = ({ client, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({
     name:   client.name   ?? "",
     email:  client.email  ?? "",
@@ -467,7 +471,7 @@ export const EditClientModal = ({ client, onClose }) => {
     barber: client.barber ?? "",
     status: client.status ?? "Regular",
     visits: client.visits ?? 0,
-    spent:  client.spent  ?? "$0",
+    spent:  client.spent  ?? "₱0",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -482,10 +486,14 @@ export const EditClientModal = ({ client, onClose }) => {
     setSubmitting(true);
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-      await updateClient(client.id, { ...form, initials });
+      const rawSpent = String(form.spent ?? "0").replace(/[₱$,\s]/g, "") || "0";
+      const spent = `₱${rawSpent}`;
+      await updateClient(client.id, { ...form, initials, spent });
+      success(`Client "${form.name.trim()}" updated`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to update client — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -520,7 +528,7 @@ export const EditClientModal = ({ client, onClose }) => {
             <input style={inputStyle} type="number" min="0" value={form.visits} onChange={set("visits")} />
           </Field>
           <Field label="Total Spent">
-            <input style={inputStyle} placeholder="e.g. $420" value={form.spent} onChange={set("spent")} />
+            <input style={inputStyle} placeholder="e.g. ₱420" value={form.spent} onChange={set("spent")} />
           </Field>
         </div>
       </ModalCard>
@@ -528,42 +536,52 @@ export const EditClientModal = ({ client, onClose }) => {
   );
 };
 
-/* ─── Delete Client Modal ──────────────────────────────────────────────────── */
-export const DeleteClientModal = ({ client, onClose }) => {
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleConfirm = async () => {
-    setDeleting(true);
-    try {
-      await deleteClient(client.id);
-      onClose();
-    } catch (e) {
-      setError(e.message);
-      setDeleting(false);
-    }
-  };
+/* ─── Shared Delete Confirm Modal ──────────────────────────────────────────── */
+const DeleteConfirmModal = ({ title, description, confirmLabel = "Yes, Delete", onClose, onConfirm, deleting, error }) => {
+  const [typed, setTyped] = useState("");
+  const confirmed = typed.trim() === "DELETE";
 
   return (
     <Overlay onClose={onClose}>
-      <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 440, width: "100%" }}>
         <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Icon name="delete_forever" size={24} style={{ color: C.error }} />
         </div>
-        <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>Delete Client?</h3>
-        <p style={{ fontSize: 14, color: C.onSurfaceVariant, marginBottom: 8, lineHeight: 1.6 }}>
-          This will permanently remove <strong>{client.name}</strong> from the system. This action cannot be undone.
-        </p>
+        <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>{title}</h3>
+        <p style={{ fontSize: 14, color: C.onSurfaceVariant, marginBottom: 20, lineHeight: 1.6 }}>{description}</p>
+
+        <div style={{ background: "#fef2f2", border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+          <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.error, marginBottom: 8 }}>
+            TYPE <span style={{ fontFamily: "monospace", background: `${C.error}15`, padding: "1px 6px", borderRadius: 4 }}>DELETE</span> TO CONFIRM
+          </p>
+          <input
+            autoFocus
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            placeholder="DELETE"
+            style={{ ...inputStyle, background: "#fff", border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, color: C.onSurface, fontFamily: "monospace", letterSpacing: "0.06em" }}
+          />
+        </div>
+
         {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 8 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
           <SecondaryBtn onClick={onClose} disabled={deleting}>Cancel</SecondaryBtn>
           <button
-            onClick={handleConfirm}
-            disabled={deleting}
-            style={{ padding: "10px 20px", borderRadius: 12, background: deleting ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: deleting ? 0.7 : 1 }}
+            onClick={onConfirm}
+            disabled={deleting || !confirmed}
+            style={{
+              padding: "10px 20px", borderRadius: 12,
+              background: !confirmed ? C.outlineVariant : deleting ? C.outlineVariant : C.error,
+              color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8,
+              opacity: (!confirmed || deleting) ? 0.55 : 1,
+              cursor: (!confirmed || deleting) ? "not-allowed" : "pointer",
+              transition: "all 0.2s",
+            }}
           >
             {deleting && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
-            {deleting ? "Deleting…" : "Yes, Delete"}
+            {deleting ? "Deleting…" : confirmLabel}
           </button>
         </div>
       </div>
@@ -571,10 +589,42 @@ export const DeleteClientModal = ({ client, onClose }) => {
   );
 };
 
+/* ─── Delete Client Modal ──────────────────────────────────────────────────── */
+export const DeleteClientModal = ({ client, onClose }) => {
+  const { success, error: toastError } = useToast();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConfirm = async () => {
+    setDeleting(true);
+    try {
+      await deleteClient(client.id);
+      success(`Client "${client.name}" deleted`);
+      onClose();
+    } catch (e) {
+      setError(e.message);
+      toastError("Failed to delete client — please try again");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <DeleteConfirmModal
+      title="Delete Client?"
+      description={<>This will permanently remove <strong>{client.name}</strong> from the system. All visit history and preferences will be lost. This action cannot be undone.</>}
+      onClose={onClose}
+      onConfirm={handleConfirm}
+      deleting={deleting}
+      error={error}
+    />
+  );
+};
+
 /* ─── Add Product Modal ────────────────────────────────────────────────────── */
 const CATEGORIES = ["Styling", "Shave & Beard", "Fragrance", "Hair Care", "Equipment"];
 
 export const AddProductModal = ({ onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({ name: "", category: "Styling", price: "", stock: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -588,11 +638,13 @@ export const AddProductModal = ({ onClose }) => {
     try {
       const stock = parseInt(form.stock) || 0;
       const status = stock === 0 ? "out-of-stock" : stock <= 5 ? "low-stock" : "in-stock";
-      const price = form.price.startsWith("$") ? form.price : `$${form.price}`;
+      const price = form.price.startsWith("₱") ? form.price : `₱${form.price}`;
       await addProduct({ name: form.name, category: form.category.toUpperCase(), price, stock, status });
+      success(`Product "${form.name.trim()}" added`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to add product — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -625,6 +677,7 @@ export const AddProductModal = ({ onClose }) => {
 
 /* ─── Edit Product Modal ───────────────────────────────────────────────────── */
 export const EditProductModal = ({ product, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({
     name:     product.name     ?? "",
     category: product.category ?? "STYLING",
@@ -643,11 +696,13 @@ export const EditProductModal = ({ product, onClose }) => {
     try {
       const stock = parseInt(form.stock) || 0;
       const status = stock === 0 ? "out-of-stock" : stock <= 5 ? "low-stock" : "in-stock";
-      const price = String(form.price).startsWith("$") ? form.price : `$${form.price}`;
+      const price = String(form.price).startsWith("₱") ? form.price : `₱${form.price}`;
       await updateProduct(product.id, { name: form.name, category: form.category.toUpperCase(), price, stock, status });
+      success(`Product "${form.name.trim()}" updated`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to update product — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -682,6 +737,7 @@ export const EditProductModal = ({ product, onClose }) => {
 
 /* ─── Delete Product Modal ─────────────────────────────────────────────────── */
 export const DeleteProductModal = ({ product, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -689,42 +745,30 @@ export const DeleteProductModal = ({ product, onClose }) => {
     setDeleting(true);
     try {
       await deleteProduct(product.id);
+      success(`Product "${product.name}" deleted`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to delete product — please try again");
       setDeleting(false);
     }
   };
 
   return (
-    <Overlay onClose={onClose}>
-      <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
-        <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-          <Icon name="delete_forever" size={24} style={{ color: C.error }} />
-        </div>
-        <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>Delete Product?</h3>
-        <p style={{ fontSize: 14, color: C.onSurfaceVariant, marginBottom: 8, lineHeight: 1.6 }}>
-          This will permanently remove <strong>{product.name}</strong> from inventory. This action cannot be undone.
-        </p>
-        {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 8 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-          <SecondaryBtn onClick={onClose} disabled={deleting}>Cancel</SecondaryBtn>
-          <button
-            onClick={handleConfirm}
-            disabled={deleting}
-            style={{ padding: "10px 20px", borderRadius: 12, background: deleting ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: deleting ? 0.7 : 1 }}
-          >
-            {deleting && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
-            {deleting ? "Deleting…" : "Yes, Delete"}
-          </button>
-        </div>
-      </div>
-    </Overlay>
+    <DeleteConfirmModal
+      title="Delete Product?"
+      description={<>This will permanently remove <strong>{product.name}</strong> from inventory. Stock history will also be lost. This action cannot be undone.</>}
+      onClose={onClose}
+      onConfirm={handleConfirm}
+      deleting={deleting}
+      error={error}
+    />
   );
 };
 
 /* ─── Restock Modal ────────────────────────────────────────────────────────── */
 export const RestockModal = ({ product, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [qty, setQty] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -744,9 +788,11 @@ export const RestockModal = ({ product, onClose }) => {
         change: `+${addQty}`,
         status: "in-stock",
       });
+      success(`Restocked "${product.name}" — +${addQty} units added`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to restock product — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -827,6 +873,7 @@ const SERVICES = [
 ];
 
 export const NewSaleModal = ({ onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({ client: "", service: SERVICES[0], barber: "", amount: "", method: "Card", status: "Completed" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -841,13 +888,15 @@ export const NewSaleModal = ({ onClose }) => {
     if (!form.amount) { setError("Amount is required."); return; }
     setSubmitting(true);
     try {
-      const amount = form.amount.startsWith("$") ? form.amount : `$${form.amount}`;
+      const amount = form.amount.startsWith("₱") ? form.amount : `₱${form.amount}`;
       const txnId = `TXN-${Date.now().toString().slice(-4)}`;
       const date = new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
       await addTransaction({ ...form, amount, txnId, date });
+      success(`Sale recorded — ${amount} for ${form.client.trim()}`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to record sale — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -896,6 +945,7 @@ const ROLES = ["Master Stylist", "Creative Lead", "Senior Stylist", "Junior Styl
 const ALL_SERVICES = ["Executive Cut", "Hot Towel Shave", "Beard Sculpting", "Facial Detox", "Classic Haircut", "Kids Cut"];
 
 export const AddStylistModal = ({ onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({ name: "", role: ROLES[0], phone: "", email: "", status: "Active", specialties: [] });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -915,9 +965,11 @@ export const AddStylistModal = ({ onClose }) => {
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       await addStylist({ ...form, initials });
+      success(`Stylist "${form.name.trim()}" added`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to add stylist — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -972,6 +1024,7 @@ export const AddStylistModal = ({ onClose }) => {
 
 /* ─── Edit Stylist Modal ───────────────────────────────────────────────────── */
 export const EditStylistModal = ({ stylist, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [form, setForm] = useState({
     name:        stylist.name        ?? "",
     role:        stylist.role        ?? ROLES[0],
@@ -998,9 +1051,11 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       await updateStylist(stylist.id, { ...form, initials });
+      success(`Stylist "${form.name.trim()}" updated`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to update stylist — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -1055,6 +1110,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
 
 /* ─── Delete Stylist Modal ─────────────────────────────────────────────────── */
 export const DeleteStylistModal = ({ stylist, onClose }) => {
+  const { success, error: toastError } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
@@ -1062,36 +1118,24 @@ export const DeleteStylistModal = ({ stylist, onClose }) => {
     setDeleting(true);
     try {
       await deleteStylist(stylist.id);
+      success(`Stylist "${stylist.name}" removed`);
       onClose();
     } catch (e) {
       setError(e.message);
+      toastError("Failed to delete stylist — please try again");
       setDeleting(false);
     }
   };
 
   return (
-    <Overlay onClose={onClose}>
-      <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
-        <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-          <Icon name="delete_forever" size={24} style={{ color: C.error }} />
-        </div>
-        <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>Remove Stylist?</h3>
-        <p style={{ fontSize: 14, color: C.onSurfaceVariant, marginBottom: 8, lineHeight: 1.6 }}>
-          This will permanently remove <strong>{stylist.name}</strong> from the system. This action cannot be undone.
-        </p>
-        {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 8 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-          <SecondaryBtn onClick={onClose} disabled={deleting}>Cancel</SecondaryBtn>
-          <button
-            onClick={handleConfirm}
-            disabled={deleting}
-            style={{ padding: "10px 20px", borderRadius: 12, background: deleting ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: deleting ? 0.7 : 1 }}
-          >
-            {deleting && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
-            {deleting ? "Removing…" : "Yes, Remove"}
-          </button>
-        </div>
-      </div>
-    </Overlay>
+    <DeleteConfirmModal
+      title="Remove Stylist?"
+      description={<>This will permanently remove <strong>{stylist.name}</strong> from the system. Their performance history will also be deleted. This action cannot be undone.</>}
+      confirmLabel="Yes, Remove"
+      onClose={onClose}
+      onConfirm={handleConfirm}
+      deleting={deleting}
+      error={error}
+    />
   );
 };

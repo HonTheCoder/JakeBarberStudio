@@ -18,8 +18,11 @@ import ReportsPage    from "./pages/ReportsPage";
 import SettingsPage   from "./pages/SettingsPage";
 import ComingSoonPage from "./pages/ComingSoonPage";
 
-import { useSettings }       from "./hooks/useFirestore";
+import { SettingsProvider } from "./context/SettingsProvider";
+import { ToastProvider } from "./context/ToastContext";
+import { useSettingsContext } from "./context/useSettingsContext";
 import { useNotifications }  from "./hooks/useNotification";
+import { useTopBarNotifications } from "./hooks/useTopBarNotifications";
 import useIdleTimer           from "./hooks/useIdleTimer";
 
 const MOBILE_BREAKPOINT = 768;
@@ -31,8 +34,18 @@ const Shell = () => {
   const defaultPage = "dashboard";
 
   const [active,     setActive]     = useState(defaultPage);
-  const [collapsed,  setCollapsed]  = useState(false);
-  const [search,     setSearch]     = useState("");
+  const [collapsed,  setCollapsed]  = useState(() => {
+    try { return localStorage.getItem("collapsed") === "true"; } catch { return false; }
+  });
+  // Per-page search: persisted in sessionStorage so queries survive navigation and refresh
+  const ssKey = page => `search:${page}`;
+  const [search, setSearchRaw] = useState(() => {
+    try { return sessionStorage.getItem(ssKey(defaultPage)) ?? ""; } catch { return ""; }
+  });
+  const setSearch = val => {
+    setSearchRaw(val);
+    try { sessionStorage.setItem(ssKey(active), val); } catch { /* noop */ }
+  };
   const [isMobile,   setIsMobile]   = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isOffline,  setIsOffline]  = useState(!navigator.onLine);
@@ -43,13 +56,13 @@ const Shell = () => {
   });
 
   // Live notification preferences from Firestore
-  const { settings } = useSettings();
+  const { settings } = useSettingsContext();
 
   // Wire real browser notifications to Firestore listeners
   useNotifications(settings?.notifs);
-
-  // Enforce session timeout: log out after the configured idle period
   useIdleTimer(settings?.sessionTimeout, logout);
+
+  const notifications = useTopBarNotifications();
 
   useEffect(() => {
     const handler = () => {
@@ -84,6 +97,7 @@ const Shell = () => {
   useEffect(() => {
     const allowed = getNavItems(role).map(i => i.id);
     if (!allowed.includes(active)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActive(allowed[0] ?? "stylists");
     }
   }, [role, active]);
@@ -93,14 +107,16 @@ const Shell = () => {
     const handler = () => setActive("settings");
     window.addEventListener("navigate-settings", handler);
     return () => window.removeEventListener("navigate-settings", handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDarkModeChange   = (val) => {
     setDarkMode(val);
-    try { localStorage.setItem("darkMode", String(val)); } catch {}
+    try { localStorage.setItem("darkMode", String(val)); } catch { /* noop */ }
   };
-  const handleCompactNavChange = (val) => setCollapsed(val);
+  const handleCompactNavChange = (val) => {
+    setCollapsed(val);
+    try { localStorage.setItem("collapsed", String(val)); } catch { /* noop */ }
+  };
 
   if (!user) return <LoginPage />;
 
@@ -140,7 +156,7 @@ const Shell = () => {
 
       <Sidebar
         active={active}
-        setActive={page => { setActive(page); setSearch(""); if (isMobile) setDrawerOpen(false); }}
+        setActive={page => { setActive(page); try { setSearchRaw(sessionStorage.getItem(`search:${page}`) ?? ""); } catch { setSearchRaw(""); } if (isMobile) setDrawerOpen(false); }}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         isMobile={isMobile}
@@ -178,8 +194,11 @@ const Shell = () => {
           userEmail={user.email}
           displayName={displayName}
           role={role}
+          notifications={notifications}
         />
-        {renderPage()}
+        <div key={active} className="fade-up">
+          {renderPage()}
+        </div>
       </main>
 
     </div>
@@ -189,7 +208,11 @@ const Shell = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <Shell />
+      <SettingsProvider>
+        <ToastProvider>
+          <Shell />
+        </ToastProvider>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

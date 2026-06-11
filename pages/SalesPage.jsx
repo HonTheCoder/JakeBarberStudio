@@ -5,19 +5,10 @@ import { C } from "../tokens/design";
 import { KpiCard, Badge, Icon, SectionTitle, PrimaryBtn, SecondaryBtn } from "../components/ui";
 import { NewSaleModal } from "../components/modals";
 import { useTransactions } from "../hooks/useFirestore";
-import { fmt } from "../utils/currency";
+import { fmt, toNum, parseDate } from "../utils/currency";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-
-const parseDate = str => {
-  if (!str) return null;
-  if (str?.toDate) return str.toDate();
-  const d = new Date(str);
-  return isNaN(d) ? null : d;
-};
-
-const toNum = v => parseFloat(String(v ?? "0").replace(/[$,]/g, "")) || 0;
 
 const Spinner = () => (
   <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
@@ -204,7 +195,24 @@ const SalesPage = ({ search = "" }) => {
             </div>
           ))}
           {filtered.length === 0 && (
-            <div style={{ textAlign: "center", padding: 60, color: C.onSurfaceVariant, fontSize: 13 }}>No transactions found</div>
+            <div className="card" style={{ padding: "64px 40px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ width: 64, height: 64, borderRadius: 18, background: `${C.secondary}18`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                <Icon name="receipt_long" size={32} style={{ color: C.secondary }} />
+              </div>
+              <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>No transactions yet</p>
+              <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant, marginBottom: 28, maxWidth: 300 }}>
+                Record your first sale to start tracking revenue.
+              </p>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 14, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+                onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+              >
+                <Icon name="receipt_long" size={18} style={{ color: "#fff" }} />
+                Record your first sale
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -241,7 +249,26 @@ const SalesPage = ({ search = "" }) => {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: 48, textAlign: "center", color: C.onSurfaceVariant, fontSize: 13 }}>No transactions found</td>
+                    <td colSpan={7} style={{ padding: "64px 40px", textAlign: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <div style={{ width: 64, height: 64, borderRadius: 18, background: `${C.secondary}18`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                          <Icon name="receipt_long" size={32} style={{ color: C.secondary }} />
+                        </div>
+                        <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>No transactions yet</p>
+                        <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant, marginBottom: 28, maxWidth: 320 }}>
+                          Record your first sale to start tracking revenue and performance.
+                        </p>
+                        <button
+                          onClick={() => setShowModal(true)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 14, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                          onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+                          onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+                        >
+                          <Icon name="receipt_long" size={18} style={{ color: "#fff" }} />
+                          Record your first sale
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )}
               </tbody>

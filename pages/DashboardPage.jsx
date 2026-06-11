@@ -1,14 +1,14 @@
 import { useState } from "react";
+import useIsMobile from "../hooks/useIsMobile";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
 import { useStats } from "../hooks/useStats";
-import { useClients, useStylists } from "../hooks/useFirestore";
 import { AddClientModal, AddStylistModal } from "../components/modals";
 import { Icon, Badge, SectionTitle } from "../components/ui";
 
-import { fmt } from "../utils/currency";
+import { fmt, toNum } from "../utils/currency";
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
 const Sk = ({ w = "100%", h = 16, r = 8, style: s = {} }) => (
@@ -233,6 +233,7 @@ const TodaySchedule = ({ appointments, loading }) => {
 const AdminDashboard = ({ stats, loading, clients, stylists }) => {
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddBarber, setShowAddBarber] = useState(false);
+  const isMobile = useIsMobile();
 
   const activeBarbers = (stylists ?? []).filter(s => s.status === "Active").length;
   const recentClients = (clients ?? []).slice(0, 4);
@@ -257,7 +258,7 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
       </div>
 
       {/* ── Weekly Sales Chart + Recent Clients ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, marginBottom: 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 24, marginBottom: 28, alignItems: "start" }}>
 
         {/* Weekly Sales Bar Chart */}
         <div className="card" style={{ padding: 28 }}>
@@ -269,7 +270,7 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
               <BarChart data={stats.salesData} barSize={28} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={`${C.outlineVariant}30`} vertical={false} />
                 <XAxis dataKey="day" tick={{ fontFamily: "Geist", fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => `$${v / 1000}k`} tick={{ fontFamily: "Geist", fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} width={44} />
+                <YAxis tickFormatter={v => fmt(v, true)} tick={{ fontFamily: "Geist", fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} width={44} />
                 <Tooltip content={<ChartTip />} cursor={{ fill: `${C.primary}08` }} />
                 <Bar dataKey="sales" name="Sales" fill={C.primary} radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -287,7 +288,26 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
                   <div style={{ flex: 1 }}><Sk w="60%" h={13} style={{ marginBottom: 6 }} /><Sk w="40%" h={11} /></div>
                 </div>
               ))
-            : recentClients.map((c, i) => (
+            : recentClients.length === 0
+              ? (
+                <div style={{ paddingTop: 24, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 14, background: `${C.secondary}18`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                    <Icon name="group" size={26} style={{ color: C.secondary }} />
+                  </div>
+                  <p style={{ fontFamily: "Geist", fontSize: 14, fontWeight: 600, color: C.primary, marginBottom: 6 }}>No clients yet</p>
+                  <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, marginBottom: 20 }}>Add your first client to get started.</p>
+                  <button
+                    onClick={() => setShowAddClient(true)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 10, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                    onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+                    onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+                  >
+                    <Icon name="person_add" size={15} style={{ color: "#fff" }} />
+                    Add your first client
+                  </button>
+                </div>
+              )
+              : recentClients.map((c, i) => (
                 <div key={c.id ?? i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < recentClients.length - 1 ? `1px solid ${C.outlineVariant}20` : "none" }}>
                   <ClientAvatar initials={c.initials} name={c.name} sub={c.lastVisit} status={c.status} />
                   <Badge status={c.status} />
@@ -317,6 +337,7 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
    BARBER DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
 const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists }) => {
+  const isMobile = useIsMobile();
   /* ── Resolve barber's display name from stylists collection via uid ── */
   const stylistRecord = (stylists ?? []).find(s => s.uid === userId);
   const barberName = stylistRecord?.name
@@ -330,7 +351,7 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
       : (t.barber ?? "").toLowerCase() === barberName.toLowerCase()
   );
   const myCompleted = myTx.filter(t => t.status === "Completed");
-  const myEarnings = myCompleted.reduce((s, t) => s + (parseFloat(String(t.amount ?? "0").replace(/[$,]/g, "")) || 0), 0);
+  const myEarnings = myCompleted.reduce((s, t) => s + toNum(t.amount), 0);
   const myPending = myTx.filter(t => t.status !== "Completed" && t.status !== "Refunded");
 
   const recentClients = (clients ?? []).slice(0, 3);
@@ -375,7 +396,7 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
       </div>
 
       {/* ── Today's Schedule + Recent Clients ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 24, alignItems: "start" }}>
 
         {/* Today's Schedule — real times from transaction date field */}
         <TodaySchedule appointments={todayAppointments} loading={loading} />
@@ -390,13 +411,23 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
                   <div style={{ flex: 1 }}><Sk w="65%" h={13} style={{ marginBottom: 5 }} /><Sk w="45%" h={11} /></div>
                 </div>
               ))
-            : recentClients.map((c, i) => (
+            : recentClients.length === 0
+              ? (
+                <div style={{ paddingTop: 20, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, background: `${C.secondary}18`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                    <Icon name="group" size={24} style={{ color: C.secondary }} />
+                  </div>
+                  <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.primary, marginBottom: 4 }}>No clients yet</p>
+                  <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant }}>Clients will appear here after visits.</p>
+                </div>
+              )
+              : recentClients.map((c, i) => (
                 <div key={c.id ?? i} style={{ padding: "10px 0", borderBottom: i < recentClients.length - 1 ? `1px solid ${C.outlineVariant}20` : "none" }}>
                   <ClientAvatar initials={c.initials} name={c.name} sub={`${c.visits} visits`} status={c.status} />
                 </div>
               ))
           }
-          {!loading && (
+          {!loading && recentClients.length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.outlineVariant}20` }}>
               <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, textAlign: "center" }}>
                 {(clients ?? []).length} total clients
@@ -414,9 +445,7 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
 ═══════════════════════════════════════════════════════════════════════════ */
 const DashboardPage = () => {
   const { role, user } = useAuth();
-  const { stats, loading } = useStats();
-  const { data: clients } = useClients();
-  const { data: stylists } = useStylists();
+  const { stats, loading, clients, stylists } = useStats();
 
   if (role === "barber") {
     return (
