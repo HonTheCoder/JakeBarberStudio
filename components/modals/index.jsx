@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import QRCode from "qrcode";
 import { C } from "../../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../ui";
 import { useToast } from "../../context/ToastContext";
@@ -102,74 +103,25 @@ const SectionTitle = ({ children }) => (
 );
 
 /* ─── QR Builder (pure JS, no library) ────────────────────────────────────── */
-function buildQRMatrix(text) {
-  const N = 21;
-  const mat = Array.from({ length: N }, () => Array(N).fill(null));
-  const finder = (r, c) => {
-    for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++)
-      mat[r + i][c + j] = (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4));
-    for (let k = 0; k < 8; k++) {
-      if (r + 7 < N && c + k < N) mat[r + 7][c + k] = false;
-      if (r + k < N && c + 7 < N) mat[r + k][c + 7] = false;
-    }
-  };
-  finder(0, 0); finder(0, 14); finder(14, 0);
-  for (let i = 8; i <= 12; i++) { mat[6][i] = (i % 2 === 0); mat[i][6] = (i % 2 === 0); }
-  mat[13][8] = true;
-  const fmtBits = [1,0,1,0,1,0,0,0,0,0,1,0,0,1,0];
-  [0,1,2,3,4,5,7].forEach((pos, i) => { mat[8][pos] = fmtBits[i]; mat[pos][8] = fmtBits[14 - i]; });
-  [8,9,10,11,12,13,14].forEach((pos, i) => { mat[pos][8] = fmtBits[6 + i]; mat[8][pos] = fmtBits[8 + i]; });
-  const bytes = [];
-  for (let i = 0; i < Math.min(text.length, 17); i++) bytes.push(text.charCodeAt(i));
-  const bits = [];
-  const push = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push((v >> i) & 1); };
-  push(0b0100, 4); push(bytes.length, 8);
-  bytes.forEach(b => push(b, 8));
-  push(0b0000, 4);
-  while (bits.length < 152) { bits.push(1,1,1,0,1,1,0,0); if (bits.length >= 152) break; bits.push(0,0,0,1,0,0,0,1); }
-  bits.length = 152;
-  let bitIdx = 0;
-  const isReserved = (r, c) => mat[r][c] !== null;
-  for (let col = N - 1; col >= 0; col -= 2) {
-    const effectiveCol = col <= 6 ? col - 1 : col;
-    for (let row = N - 1; row >= 0; row--) {
-      for (let dc = 0; dc <= 1; dc++) {
-        const c = effectiveCol - dc;
-        if (c < 0 || c >= N) continue;
-        if (!isReserved(row, c)) {
-          const bit = bits[bitIdx++] ?? 0;
-          mat[row][c] = ((row + c) % 2 === 0) ? !bit : !!bit;
-        }
-      }
-    }
-  }
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (mat[r][c] === null) mat[r][c] = false;
-  return mat;
-}
-
 /* ─── New Client QR Modal — shown after saving a new client ───────────────── */
 export const NewClientQRModal = ({ client, onClose }) => {
   const canvasRef = useRef(null);
   const [downloaded, setDownloaded] = useState(false);
 
+  // Full data string — qrcode library handles any length correctly
   const qrData = `jake-barber-studio:client:${client.id ?? "000"}`;
-  const matrix = buildQRMatrix(qrData.slice(0, 17));
 
+  // Render QR into the small preview canvas using the real qrcode library
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const N = matrix.length;
-    const cell = 8, pad = 16;
-    canvas.width = N * cell + pad * 2;
-    canvas.height = N * cell + pad * 2;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-      ctx.fillStyle = matrix[r][c] ? "#1b1c1c" : "#ffffff";
-      ctx.fillRect(pad + c * cell, pad + r * cell, cell, cell);
-    }
-  }, []);
+    QRCode.toCanvas(canvas, qrData, {
+      width: 200,
+      margin: 2,
+      color: { dark: "#1b1c1c", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  }, [qrData]);
 
   const handleDownload = () => {
     const card = document.createElement("canvas");

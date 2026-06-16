@@ -52,7 +52,13 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
   // Declared BEFORE decode so useCallback can reference it without hoisting issues
   const handleQRData = useCallback((raw) => {
     const PREFIX = "jake-barber-studio:client:";
-    if (!raw.startsWith(PREFIX)) return; // unknown QR — keep scanning
+    if (!raw.startsWith(PREFIX)) {
+      // Scanned a valid QR but not a Jake Barber Studio client card
+      stopCamera();
+      setErrorMsg(`Unrecognised QR code. Please scan a Jake Barber Studio client card.`);
+      setStatus("error");
+      return;
+    }
     const clientId = raw.slice(PREFIX.length).trim();
     const match = clients.find(c => c.id === clientId);
     if (match) {
@@ -86,7 +92,7 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
         ctx.drawImage(video, 0, 0);
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const result  = jsQR(imgData.data, imgData.width, imgData.height, {
-          inversionAttempts: "dontInvert",
+          inversionAttempts: "attemptBoth",
         });
         if (result?.data) {
           handleQRData(result.data);

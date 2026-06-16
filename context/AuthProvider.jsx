@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { AuthContext } from "./AuthContext";
 
@@ -18,9 +18,29 @@ export const AuthProvider = ({ children }) => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
         try {
-          const snap = await getDoc(doc(db, "users", u.uid));
-          const fetchedRole = snap.exists() ? (snap.data().role ?? "barber") : "barber";
-          const fetchedName = snap.exists() ? (snap.data().name ?? null) : null;
+          const userRef = doc(db, "users", u.uid);
+          const snap    = await getDoc(userRef);
+
+          let fetchedRole, fetchedName;
+
+          if (snap.exists()) {
+            fetchedRole = snap.data().role ?? "barber";
+            fetchedName = snap.data().name ?? null;
+          } else {
+            // First time this user has logged in — create their profile doc.
+            // Default role is "admin" so the first account gets full access
+            // immediately. Change any subsequent user to "barber" in the
+            // Firebase Console → Firestore → users/{uid} → role field.
+            fetchedRole = "admin";
+            fetchedName = u.displayName ?? u.email?.split("@")[0] ?? null;
+            await setDoc(userRef, {
+              role:      fetchedRole,
+              name:      fetchedName,
+              email:     u.email,
+              createdAt: serverTimestamp(),
+            });
+          }
+
           setRole(fetchedRole);
           setDisplayName(fetchedName);
         } catch {
