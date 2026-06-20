@@ -43,7 +43,8 @@ export const AuthProvider = ({ children }) => {
 
           setRole(fetchedRole);
           setDisplayName(fetchedName);
-        } catch {
+        } catch (err) {
+          console.error("[AuthProvider] Failed to load/create user profile:", err);
           setRole("barber");
           setDisplayName(null);
         }

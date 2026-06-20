@@ -145,7 +145,7 @@ const staffInputStyle = {
 };
 
 const StaffEditModal = ({ member, onClose, onSave }) => {
-  const [form, setForm] = useState({ name: member.name, role: member.role, email: member.email, phone: member.phone ?? "", status: member.status });
+  const [form, setForm] = useState({ name: member.name, role: member.role, email: member.email, phone: member.phone ?? "", status: member.status, appRole: member.appRole ?? "barber" });
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
 
@@ -205,6 +205,16 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
               {["Active", "Inactive"].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>App Access</label>
+          <select style={{ ...staffInputStyle, appearance: "none" }} value={form.appRole} onChange={set("appRole")}>
+            <option value="barber">Barber — clients, stylists, appointments only</option>
+            <option value="admin">Admin — full access (inventory, transactions, reports)</option>
+          </select>
+          <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 6, lineHeight: 1.5 }}>
+            Controls what this account can see and edit in the app. Takes effect next time they log in.
+          </p>
         </div>
         {err && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginBottom: 8 }}>
@@ -872,6 +882,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   // Staff list — now also seeded from Firestore users collection
   const [staff, setStaff] = useState([]);
   const [staffLoading, setStaffLoading] = useState(true);
+  const [staffLoadError, setStaffLoadError] = useState(null);
 
   // Load real staff from Firestore users collection on mount
   useEffect(() => {
@@ -890,8 +901,9 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
           }));
           setStaff(fromFirestore);
         }
-      } catch {
-        // Firestore unavailable — fall back to defaults from settings
+      } catch (err) {
+        console.error("[SettingsPage] Failed to load staff list:", err);
+        setStaffLoadError(err.message || "Failed to load staff accounts.");
       } finally {
         setStaffLoading(false);
       }
@@ -1001,6 +1013,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       phone:    updated.phone ?? "",
       jobTitle: updated.role,
       status:   updated.status,
+      role:     updated.appRole ?? "barber", // controls Firestore security rule access
     });
     // Also sync the matching stylist card (matched by uid field)
     const stylistSnap = await getDocs(query(collection(db, "stylists"), where("uid", "==", updated.id)));
@@ -1096,6 +1109,19 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
           <div style={{ padding: "24px 28px", color: C.onSurfaceVariant, fontSize: 13, fontFamily: "Geist", display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="hourglass_empty" size={16} style={{ color: C.onSurfaceVariant }} />
             Loading accounts…
+          </div>
+        ) : staffLoadError ? (
+          <div style={{ padding: "24px 28px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", background: "#fef2f2", borderRadius: 12 }}>
+              <Icon name="error" size={18} style={{ color: C.error, flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: C.error }}>Couldn't load staff accounts</p>
+                <p style={{ fontFamily: "Geist", fontSize: 11, color: C.error, marginTop: 3, lineHeight: 1.5 }}>{staffLoadError}</p>
+                <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 6, lineHeight: 1.5 }}>
+                  This is almost always a Firestore Security Rules issue — your signed-in account needs permission to list the <code>users</code> collection.
+                </p>
+              </div>
+            </div>
           </div>
         ) : staff.length === 0 ? (
           <div style={{ padding: "24px 28px", color: C.onSurfaceVariant, fontSize: 13, fontFamily: "Geist" }}>

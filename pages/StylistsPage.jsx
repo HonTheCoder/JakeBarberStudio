@@ -41,6 +41,14 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
           <div>
             <div style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary }}>{stylist.name}</div>
             <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>{stylist.role}</div>
+            {!stylist.uid && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5, padding: "2px 8px", borderRadius: 999, background: "#fef3c7" }}>
+                <Icon name="warning" size={11} style={{ color: "#92400e" }} />
+                <span style={{ fontFamily: "Geist", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#92400e" }}>
+                  No login
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <StatusBadge status={stylist.status} />

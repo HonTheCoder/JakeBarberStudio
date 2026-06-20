@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import QRCode from "qrcode";
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { C } from "../../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../ui";
 import { useToast } from "../../context/ToastContext";
+import useIsMobile from "../../hooks/useIsMobile";
+import { db } from "../../firebase";
 import {
   addClient, updateClient, deleteClient,
   addProduct, updateProduct, deleteProduct, addStockMovement,
@@ -11,6 +16,16 @@ import {
 } from "../../hooks/useFirestore";
 
 /* ─── Shared Overlay ──────────────────────────────────────────────────────── */
+// Secondary Firebase Auth instance — lets us create a new login account
+// without signing the currently logged-in admin out.
+const getSecondaryAuth = () => {
+  const existing = getApps().find(a => a.name === "secondary");
+  if (existing) return getAuth(existing);
+  const primary = getApps().find(a => a.name === "[DEFAULT]") ?? getApps()[0];
+  const secondary = initializeApp(primary.options, "secondary");
+  return getAuth(secondary);
+};
+
 const Overlay = ({ onClose, children }) => (
   <div
     onClick={onClose}
@@ -244,6 +259,8 @@ export const NewClientQRModal = ({ client, onClose }) => {
 
 export const AddClientModal = ({ onClose, onSaved }) => {
   const { success, error: toastError } = useToast();
+  const isMobile = useIsMobile();
+  const [showFullProfile, setShowFullProfile] = useState(false);
   const [form, setForm] = useState({
     // Basic
     name: "", phone: "", status: "New",
@@ -284,7 +301,7 @@ export const AddClientModal = ({ onClose, onSaved }) => {
 
   return (
     <Overlay onClose={onClose}>
-      <div className="card" style={{ padding: 32, position: "relative", maxHeight: "90vh", overflowY: "auto", maxWidth: 560, width: "100%" }}>
+      <div className="card" style={{ padding: isMobile ? 24 : 36, position: "relative", maxHeight: "90vh", overflowY: "auto", maxWidth: isMobile ? 560 : 840, width: "100%" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -293,7 +310,9 @@ export const AddClientModal = ({ onClose, onSaved }) => {
             </div>
             <div>
               <h2 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary }}>Add Client</h2>
-              <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>Client profile + haircut preferences</p>
+              <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>
+                {showFullProfile ? "Client profile + haircut preferences" : "Quick add — just the essentials"}
+              </p>
             </div>
           </div>
           <button onClick={onClose} style={{ padding: 6, borderRadius: 8, transition: "background 0.15s" }}
@@ -308,9 +327,9 @@ export const AddClientModal = ({ onClose, onSaved }) => {
         {/* ── Personal Info ── */}
         <SectionTitle>Personal Information</SectionTitle>
         <Field label="Full Name *">
-          <input style={inputStyle} placeholder="e.g. Alexander Reid" value={form.name} onChange={set("name")} />
+          <input style={inputStyle} placeholder="e.g. Alexander Reid" value={form.name} onChange={set("name")} autoFocus />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 14 }}>
           <Field label="Phone">
             <input style={inputStyle} placeholder="+1 (555) 012-3456" value={form.phone} onChange={set("phone")} />
           </Field>
@@ -319,17 +338,50 @@ export const AddClientModal = ({ onClose, onSaved }) => {
               {["New", "Regular", "VIP"].map(s => <option key={s}>{s}</option>)}
             </select>
           </Field>
+          {!isMobile && (
+            <Field label="Last Barber">
+              <select style={selectStyle} value={form.barber} onChange={set("barber")}>
+                <option value="">— Select barber —</option>
+                {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </Field>
+          )}
         </div>
-        <Field label="Last Barber">
-          <select style={selectStyle} value={form.barber} onChange={set("barber")}>
-            <option value="">— Select barber —</option>
-            {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-        </Field>
+        {isMobile && (
+          <Field label="Last Barber">
+            <select style={selectStyle} value={form.barber} onChange={set("barber")}>
+              <option value="">— Select barber —</option>
+              {activeBarbers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+          </Field>
+        )}
 
+        {/* ── Toggle: full profile ── */}
+        <button
+          type="button"
+          onClick={() => setShowFullProfile(v => !v)}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            width: "100%", padding: "12px 16px", borderRadius: 12,
+            background: C.surfaceLow, marginTop: 8, marginBottom: showFullProfile ? 20 : 8,
+            border: "none", cursor: "pointer",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Icon name="content_cut" size={16} style={{ color: C.onSurfaceVariant }} />
+            <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: C.primary }}>
+              Add haircut profile & health notes
+            </span>
+            <span style={{ fontFamily: "Geist", fontSize: 10, color: C.onSurfaceVariant, opacity: 0.7 }}>(optional — can add later)</span>
+          </div>
+          <Icon name={showFullProfile ? "expand_less" : "expand_more"} size={18} style={{ color: C.onSurfaceVariant }} />
+        </button>
+
+        {showFullProfile && (
+          <>
         {/* ── Haircut Style ── */}
         <SectionTitle>Haircut Preferences</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 14 }}>
           <div>
             <Field label="Haircut Style">
               <select style={selectStyle} value={form.haircutStyle} onChange={set("haircutStyle")}>
@@ -355,8 +407,6 @@ export const AddClientModal = ({ onClose, onSaved }) => {
               </Field>
             )}
           </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
           <Field label="Hair Texture">
             <select style={selectStyle} value={form.hairTexture} onChange={set("hairTexture")}>
               <option value="">Select…</option>
@@ -366,17 +416,19 @@ export const AddClientModal = ({ onClose, onSaved }) => {
           <Field label="Clipper Guard #">
             <input style={inputStyle} placeholder="e.g. 2, 3½" value={form.clipperGuard} onChange={set("clipperGuard")} />
           </Field>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <Field label="Neckline">
             <select style={selectStyle} value={form.necklineStyle} onChange={set("necklineStyle")}>
               {["Tapered", "Blocked", "Rounded", "Faded"].map(s => <option key={s}>{s}</option>)}
             </select>
           </Field>
+          <Field label="Sideline Finish">
+            <select style={selectStyle} value={form.sidelineStyle} onChange={set("sidelineStyle")}>
+              {["Natural", "Hard Part", "Line Up", "Faded"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </Field>
         </div>
-        <Field label="Sideline Finish">
-          <select style={selectStyle} value={form.sidelineStyle} onChange={set("sidelineStyle")}>
-            {["Natural", "Hard Part", "Line Up", "Faded"].map(s => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
         <Field label="Haircut Notes">
           <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 64 }}
             placeholder="e.g. Leaves top longer, blends low on sides, no product…"
@@ -385,7 +437,7 @@ export const AddClientModal = ({ onClose, onSaved }) => {
 
         {/* ── Health ── */}
         <SectionTitle>Health & Scalp</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr", gap: 14 }}>
           <Field label="Allergies / Sensitivities">
             <input style={inputStyle} placeholder="e.g. Fragrance, Latex" value={form.allergies} onChange={set("allergies")} />
           </Field>
@@ -401,6 +453,8 @@ export const AddClientModal = ({ onClose, onSaved }) => {
             placeholder="Any other preferences, VIP instructions, special occasions…"
             value={form.notes} onChange={set("notes")} />
         </Field>
+          </>
+        )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 8, justifyContent: "flex-end" }}>
           <SecondaryBtn onClick={onClose}>Cancel</SecondaryBtn>
@@ -988,6 +1042,56 @@ export const EditStylistModal = ({ stylist, onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Login account creation (for stylists added without one) ────────────
+  const hasLogin = !!stylist.uid;
+  const [showCreateLogin, setShowCreateLogin] = useState(false);
+  const [loginForm, setLoginForm] = useState({ password: "", confirmPassword: "", appRole: "barber" });
+  const [loginBusy,  setLoginBusy]  = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [loginDone,  setLoginDone]  = useState(false);
+
+  const setLogin = k => e => setLoginForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleCreateLogin = async () => {
+    if (!form.email.trim()) { setLoginError("Add an email above first."); return; }
+    if (loginForm.password.length < 6) { setLoginError("Password must be at least 6 characters."); return; }
+    if (loginForm.password !== loginForm.confirmPassword) { setLoginError("Passwords do not match."); return; }
+
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      const secondaryAuth = getSecondaryAuth();
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), loginForm.password);
+      const uid  = cred.user.uid;
+      await secondaryAuth.signOut();
+
+      await setDoc(doc(db, "users", uid), {
+        uid,
+        name:      form.name.trim(),
+        email:     form.email.trim().toLowerCase(),
+        role:      loginForm.appRole, // "admin" | "barber" — controls Firestore access
+        jobTitle:  form.role,
+        status:    form.status,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Link this stylist card to the new account
+      await updateStylist(stylist.id, { uid, email: form.email.trim().toLowerCase() });
+
+      setLoginDone(true);
+      success(`Login created for ${form.name.trim()}`);
+    } catch (e) {
+      const msgs = {
+        "auth/email-already-in-use": "That email is already registered to another account.",
+        "auth/invalid-email":        "Invalid email address.",
+        "auth/weak-password":        "Password is too weak.",
+      };
+      setLoginError(msgs[e.code] || e.message);
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const toggleSpecialty = sp => setForm(f => ({
@@ -1017,6 +1121,90 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     <Overlay onClose={onClose}>
       <ModalCard title="Edit Stylist" icon="edit" onClose={onClose} onSubmit={handleSubmit} submitting={submitting}>
         {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 16 }}>{error}</p>}
+
+        {/* ── No login account warning ── */}
+        {!hasLogin && !loginDone && (
+          <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <Icon name="warning" size={18} style={{ color: "#92400e", flexShrink: 0, marginTop: 1 }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "#92400e" }}>
+                  No login account
+                </p>
+                <p style={{ fontFamily: "Geist", fontSize: 11, color: "#92400e", marginTop: 2, lineHeight: 1.5 }}>
+                  This stylist can't sign in or appear in Settings → Staff Accounts. Create a login below to enable access.
+                </p>
+                {!showCreateLogin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateLogin(true)}
+                    style={{
+                      marginTop: 10, padding: "7px 14px", borderRadius: 8,
+                      background: "#92400e", color: "#fff",
+                      fontFamily: "Geist", fontSize: 11, fontWeight: 600,
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Icon name="person_add" size={13} style={{ color: "#fff" }} />
+                    Create Login
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showCreateLogin && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <input
+                    type="password" placeholder="Password (min. 6 chars)"
+                    style={{ ...inputStyle, background: "#fff" }}
+                    value={loginForm.password} onChange={setLogin("password")}
+                  />
+                  <input
+                    type="password" placeholder="Confirm password"
+                    style={{ ...inputStyle, background: "#fff" }}
+                    value={loginForm.confirmPassword} onChange={setLogin("confirmPassword")}
+                  />
+                </div>
+                <select
+                  style={{ ...selectStyle, background: "#fff", marginBottom: 10 }}
+                  value={loginForm.appRole} onChange={setLogin("appRole")}
+                >
+                  <option value="barber">Barber access — clients, stylists, appointments</option>
+                  <option value="admin">Admin access — full access</option>
+                </select>
+                {loginError && <p style={{ color: C.error, fontSize: 12, marginBottom: 10 }}>{loginError}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateLogin(false)}
+                    style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", color: "#92400e", fontFamily: "Geist", fontSize: 11, fontWeight: 600, border: "1px solid #fde68a" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateLogin}
+                    disabled={loginBusy}
+                    style={{ padding: "8px 14px", borderRadius: 8, background: "#92400e", color: "#fff", fontFamily: "Geist", fontSize: 11, fontWeight: 600, opacity: loginBusy ? 0.6 : 1 }}
+                  >
+                    {loginBusy ? "Creating…" : "Confirm & Create"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {loginDone && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#dcfce7", border: "1px solid #86efac", borderRadius: 12, padding: "10px 14px", marginBottom: 20 }}>
+            <Icon name="check_circle" size={16} style={{ color: "#16a34a", flexShrink: 0 }} />
+            <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "#15803d" }}>
+              Login created — this stylist can now sign in and appears in Settings → Staff Accounts
+            </span>
+          </div>
+        )}
+
         <Field label="Full Name *">
           <input style={inputStyle} value={form.name} onChange={set("name")} />
         </Field>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import jsQR from "jsqr";
 import { C } from "../tokens/design";
 import { Icon } from "../components/ui";
+import { updateClient } from "../hooks/useFirestore";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    QR SCANNER MODAL
@@ -63,8 +64,20 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     const match = clients.find(c => c.id === clientId);
     if (match) {
       stopCamera();
-      setFoundClient(match);
+
+      // Bump visit count +1 and record today's visit date in Firestore.
+      // Update local state immediately (optimistic) so the modal reflects
+      // the new count without waiting on the round trip.
+      const newVisits   = (parseInt(match.visits) || 0) + 1;
+      const todayLabel   = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const updatedClient = { ...match, visits: newVisits, lastVisit: todayLabel };
+
+      setFoundClient(updatedClient);
       setStatus("found");
+
+      updateClient(match.id, { visits: newVisits, lastVisit: todayLabel }).catch(err => {
+        console.error("[QRScannerModal] Failed to record visit:", err);
+      });
     } else {
       stopCamera();
       setErrorMsg(`Client ID "${clientId.slice(0, 14)}…" not found in the system.`);
@@ -371,7 +384,7 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
               }}>
                 <Icon name="check_circle" size={20} style={{ color: "#16a34a", flexShrink: 0 }} />
                 <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: "#15803d" }}>
-                  Client identified successfully
+                  Client identified — visit recorded
                 </p>
               </div>
 

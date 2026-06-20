@@ -254,8 +254,8 @@ const BrandedQRCard = ({ client }) => {
 /* ─────────────────────────────────────────────────────────────────────────────
    CLIENT DETAIL MODAL — full profile, visit history, QR code
 ───────────────────────────────────────────────────────────────────────────── */
-const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete }) => {
-  const [tab, setTab] = useState("profile"); // "profile" | "history" | "qr"
+const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab = "profile" }) => {
+  const [tab, setTab] = useState(initialTab); // "profile" | "history" | "qr"
   const visitHistory = Array.isArray(client.visitHistory) ? client.visitHistory : [];
 
   const tabs = [
@@ -562,11 +562,18 @@ const ClientsPage = ({ search = "" }) => {
 
   // Modal states
   const [detailClient,   setDetailClient]   = useState(null);
+  const [detailTab,      setDetailTab]      = useState("profile");
   const [editTarget,     setEditTarget]     = useState(null);
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   const [showAdd,        setShowAdd]        = useState(false);
   const [newClientForQR, setNewClientForQR] = useState(null); // shown after add
   const [showScanner,    setShowScanner]    = useState(false);
+
+  // Open the detail modal directly on a given tab (used by QR action buttons)
+  const openDetailOnTab = (client, tabId = "profile") => {
+    setDetailTab(tabId);
+    setDetailClient(client);
+  };
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("All");
@@ -729,9 +736,10 @@ const ClientsPage = ({ search = "" }) => {
         <ClientDetailModal
           client={detailClient}
           role={role}
-          onClose={() => setDetailClient(null)}
-          onEdit={() => { setEditTarget(detailClient); setDetailClient(null); }}
-          onDelete={() => { setDeleteTarget(detailClient); setDetailClient(null); }}
+          initialTab={detailTab}
+          onClose={() => { setDetailClient(null); setDetailTab("profile"); }}
+          onEdit={() => { setEditTarget(detailClient); setDetailClient(null); setDetailTab("profile"); }}
+          onDelete={() => { setDeleteTarget(detailClient); setDetailClient(null); setDetailTab("profile"); }}
         />
       )}
 
@@ -815,12 +823,10 @@ const ClientsPage = ({ search = "" }) => {
           {!isMobile && "Scan QR"}
         </button>
 
-        {/* Add client — admin only */}
-        {isAdmin && (
-          <PrimaryBtn icon="person_add" onClick={() => setShowAdd(true)}>
-            {isMobile ? "Add" : "Add Client"}
-          </PrimaryBtn>
-        )}
+        {/* Add client — all roles */}
+        <PrimaryBtn icon="person_add" onClick={() => setShowAdd(true)}>
+          {isMobile ? "Add" : "Add Client"}
+        </PrimaryBtn>
       </div>
 
       {/* ── Empty state (search/filter yielded nothing) ── */}
@@ -838,24 +844,22 @@ const ClientsPage = ({ search = "" }) => {
           <p style={{ fontFamily: "Geist", fontSize: 13, color: C.onSurfaceVariant, marginBottom: 28, maxWidth: 320 }}>
             Try adjusting your search or filters, or add a new client.
           </p>
-          {isAdmin && (
-            <button
-              onClick={() => setShowAdd(true)}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                padding: "10px 24px", borderRadius: 12,
-                background: C.primary, color: "#fff",
-                fontFamily: "Geist", fontSize: 12, fontWeight: 600,
-                letterSpacing: "0.04em", border: "none", cursor: "pointer",
-                transition: "opacity 0.15s",
-              }}
-              onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
-              onMouseOut={e => (e.currentTarget.style.opacity = "1")}
-            >
-              <Icon name="person_add" size={16} style={{ color: "#fff" }} />
-              Add Client
-            </button>
-          )}
+          <button
+            onClick={() => setShowAdd(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "10px 24px", borderRadius: 12,
+              background: C.primary, color: "#fff",
+              fontFamily: "Geist", fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.04em", border: "none", cursor: "pointer",
+              transition: "opacity 0.15s",
+            }}
+            onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
+            onMouseOut={e => (e.currentTarget.style.opacity = "1")}
+          >
+            <Icon name="person_add" size={16} style={{ color: "#fff" }} />
+            Add Client
+          </button>
         </div>
       )}
 
@@ -890,7 +894,7 @@ const ClientsPage = ({ search = "" }) => {
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <ActionBtn icon="qr_code_scanner" label="QR Code" onClick={() => { setDetailClient(c); }} color={C.onSurfaceVariant} />
+                  <ActionBtn icon="qr_code_scanner" label="QR Code" onClick={() => openDetailOnTab(c, "qr")} color={C.onSurfaceVariant} />
                   {isAdmin && <ActionBtn icon="edit" label="Edit" onClick={() => setEditTarget(c)} />}
                   {isAdmin && <ActionBtn icon="delete" label="Delete" onClick={() => setDeleteTarget(c)} danger />}
                 </div>
@@ -1023,8 +1027,8 @@ const ClientsPage = ({ search = "" }) => {
                     {/* Actions */}
                     <td style={{ padding: "15px 18px" }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                        <ActionBtn icon="visibility"      label="View Details" onClick={() => openDetail(c)} color={C.onSurfaceVariant} />
-                        <ActionBtn icon="qr_code_scanner" label="QR Code"      onClick={() => setDetailClient(c)} color={C.onSurfaceVariant} />
+                        <ActionBtn icon="visibility"      label="View Details" onClick={() => openDetailOnTab(c, "profile")} color={C.onSurfaceVariant} />
+                        <ActionBtn icon="qr_code_scanner" label="QR Code"      onClick={() => openDetailOnTab(c, "qr")} color={C.onSurfaceVariant} />
                         {isAdmin && <ActionBtn icon="edit"   label="Edit"   onClick={() => setEditTarget(c)} />}
                         {isAdmin && <ActionBtn icon="delete" label="Delete" onClick={() => setDeleteTarget(c)} danger />}
                       </div>
