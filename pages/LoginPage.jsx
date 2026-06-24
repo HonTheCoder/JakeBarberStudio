@@ -32,10 +32,9 @@ const ForgotModal = ({ prefill, onClose }) => {
 
   return (
     <div
-      onClick={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 400, width: "100%" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 400, width: "100%" }}>
         {status === "sent" ? (
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 52, height: 52, background: "#dcfce7", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>

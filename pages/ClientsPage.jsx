@@ -266,10 +266,9 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab
 
   return (
     <div
-      onClick={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
-      <div onClick={e => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="card" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Header */}
         <div style={{ padding: "24px 28px 0", borderBottom: `1px solid ${C.outlineVariant}20` }}>

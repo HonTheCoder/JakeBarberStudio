@@ -165,7 +165,7 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 500, width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -314,7 +314,7 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
 
         {/* Header */}
@@ -677,7 +677,7 @@ const TOTPSetupModal = ({ onClose }) => {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
 
         {/* Header */}
@@ -822,7 +822,7 @@ const TOTPRemoveModal = ({ onClose }) => {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
         {done ? (
           <div style={{ textAlign: "center" }}>

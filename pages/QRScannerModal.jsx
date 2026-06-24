@@ -162,15 +162,11 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { startCamera(); return () => stopCamera(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Backdrop ────────────────────────────────────────────────────────── */
-  const handleBackdrop = (e) => { if (e.target === e.currentTarget) onClose(); };
-
   /* ─────────────────────────────────────────────────────────────────────────
      RENDER
   ───────────────────────────────────────────────────────────────────────── */
   return (
     <div
-      onClick={handleBackdrop}
       style={{
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.7)",

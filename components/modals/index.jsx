@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import QRCode from "qrcode";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { C } from "../../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../ui";
 import { useToast } from "../../context/ToastContext";
@@ -26,9 +26,8 @@ const getSecondaryAuth = () => {
   return getAuth(secondary);
 };
 
-const Overlay = ({ onClose, children }) => (
+const Overlay = ({ children }) => (
   <div
-    onClick={onClose}
     style={{
       position: "fixed", inset: 0,
       background: "rgba(0,0,0,0.45)",
@@ -38,7 +37,7 @@ const Overlay = ({ onClose, children }) => (
       padding: 16,
     }}
   >
-    <div onClick={e => e.stopPropagation()} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+    <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
       {children}
     </div>
   </div>
@@ -180,10 +179,9 @@ export const NewClientQRModal = ({ client, onClose }) => {
 
   return (
     <div
-      onClick={onClose}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 36, maxWidth: 420, width: "100%", textAlign: "center" }}>
+      <div className="card" style={{ padding: 36, maxWidth: 420, width: "100%", textAlign: "center" }}>
         {/* Success header */}
         <div style={{ width: 52, height: 52, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
           <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
@@ -1042,8 +1040,22 @@ export const EditStylistModal = ({ stylist, onClose }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // ── Login account creation (for stylists added without one) ────────────
+  // ── App Access (Firestore users/{uid}.role) — only relevant if linked ──
   const hasLogin = !!stylist.uid;
+  const [appRole, setAppRole] = useState("barber");
+  const [appRoleLoading, setAppRoleLoading] = useState(hasLogin); // true only while fetching an existing login's role
+
+  useEffect(() => {
+    if (!hasLogin) return;
+    let active = true;
+    getDoc(doc(db, "users", stylist.uid))
+      .then(snap => { if (active && snap.exists()) setAppRole(snap.data().role ?? "barber"); })
+      .catch(() => {})
+      .finally(() => { if (active) setAppRoleLoading(false); });
+    return () => { active = false; };
+  }, [hasLogin, stylist.uid]);
+
+  // ── Login account creation (for stylists added without one) ────────────
   const [showCreateLogin, setShowCreateLogin] = useState(false);
   const [loginForm, setLoginForm] = useState({ password: "", confirmPassword: "", appRole: "barber" });
   const [loginBusy,  setLoginBusy]  = useState(false);
@@ -1079,6 +1091,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
       await updateStylist(stylist.id, { uid, email: form.email.trim().toLowerCase() });
 
       setLoginDone(true);
+      setAppRole(loginForm.appRole);
       success(`Login created for ${form.name.trim()}`);
     } catch (e) {
       const msgs = {
@@ -1107,6 +1120,12 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       await updateStylist(stylist.id, { ...form, initials });
+
+      // Sync App Access if this stylist has a linked login
+      if (hasLogin) {
+        await setDoc(doc(db, "users", stylist.uid), { role: appRole }, { merge: true });
+      }
+
       success(`Stylist "${form.name.trim()}" updated`);
       onClose();
     } catch (e) {
@@ -1203,6 +1222,16 @@ export const EditStylistModal = ({ stylist, onClose }) => {
               Login created — this stylist can now sign in and appears in Settings → Staff Accounts
             </span>
           </div>
+        )}
+
+        {/* ── App Access (editable when login already exists) ── */}
+        {(hasLogin || loginDone) && !appRoleLoading && (
+          <Field label="App Access">
+            <select style={selectStyle} value={appRole} onChange={e => setAppRole(e.target.value)}>
+              <option value="barber">Barber — clients, stylists, appointments only</option>
+              <option value="admin">Admin — full access (inventory, transactions, reports)</option>
+            </select>
+          </Field>
         )}
 
         <Field label="Full Name *">
