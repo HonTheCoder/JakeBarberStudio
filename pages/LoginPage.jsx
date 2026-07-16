@@ -5,9 +5,11 @@ import { useAuth } from "../context/AuthContext";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import { resolveTOTPChallenge } from "../hooks/useTOTP";
+import useScrollLock from "../hooks/useScrollLock";
 
 /* ── Forgot Password Modal ───────────────────────────────────────────────── */
 const ForgotModal = ({ prefill, onClose }) => {
+  useScrollLock();
   const [email,  setEmail]  = useState(prefill || "");
   const [status, setStatus] = useState("idle");
   const [err,    setErr]    = useState("");
@@ -32,9 +34,9 @@ const ForgotModal = ({ prefill, onClose }) => {
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
-      <div className="card" style={{ padding: 32, maxWidth: 400, width: "100%" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 400, width: "100%", margin: "auto" }}>
         {status === "sent" ? (
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 52, height: 52, background: "#dcfce7", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>

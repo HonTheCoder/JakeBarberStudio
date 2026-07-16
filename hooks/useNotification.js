@@ -10,9 +10,27 @@
  *   useNotifications(settings?.notifs)   // pass the notifs object from useSettings()
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
+
+/**
+ * Tracks whether a user is currently signed in. This hook previously opened
+ * onSnapshot listeners on "inventory" / "transactions" unconditionally, even
+ * before login. Firestore rules require an authenticated request, so those
+ * early listeners got permission-denied — and Firestore listeners are
+ * terminal once denied, so they never recovered even after a successful
+ * login (this is why low-stock/new-sale notifications silently never fired).
+ */
+const useIsSignedIn = () => {
+  const [signedIn, setSignedIn] = useState(!!auth.currentUser);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => setSignedIn(!!u));
+    return unsub;
+  }, []);
+  return signedIn;
+};
 
 /* ─── permission helper ────────────────────────────────────────────────────── */
 export const requestNotifPermission = async () => {
@@ -55,6 +73,8 @@ const markFired = (key) => localStorage.setItem(key, String(Date.now()));
 
 /* ─── hook ─────────────────────────────────────────────────────────────────── */
 export const useNotifications = (notifs) => {
+  const signedIn = useIsSignedIn();
+
   // Keep a ref so the Firestore callbacks always read the latest toggles
   // without needing to re-subscribe.
   const notifsRef = useRef(notifs);
@@ -69,6 +89,7 @@ export const useNotifications = (notifs) => {
   /* ── Inventory low-stock listener ────────────────────────────────────── */
   useEffect(() => {
     if (!("Notification" in window)) return;
+    if (!signedIn) return; // avoid querying before auth resolves (see useIsSignedIn note)
 
     const unsub = onSnapshot(
       collection(db, "inventory"),
@@ -98,11 +119,12 @@ export const useNotifications = (notifs) => {
     );
 
     return unsub;
-  }, []); // intentionally no deps — ref handles toggle changes
+  }, [signedIn]); // re-subscribes with a fresh listener once signed in
 
   /* ── New-sale listener ───────────────────────────────────────────────── */
   useEffect(() => {
     if (!("Notification" in window)) return;
+    if (!signedIn) return; // avoid querying before auth resolves (see useIsSignedIn note)
 
     const q = query(collection(db, "transactions"), orderBy("createdAt", "desc"), limit(1));
 
@@ -146,11 +168,12 @@ export const useNotifications = (notifs) => {
     );
 
     return unsub;
-  }, []);
+  }, [signedIn]); // re-subscribes with a fresh listener once signed in
 
   /* ── Daily & Weekly summary ──────────────────────────────────────────── */
   useEffect(() => {
     if (!("Notification" in window)) return;
+    if (!signedIn) return; // avoid querying before auth resolves (see useIsSignedIn note)
 
     // Check once on mount, then every 30 minutes.
     const check = async () => {
@@ -209,5 +232,5 @@ export const useNotifications = (notifs) => {
     check();
     const interval = setInterval(check, 30 * 60 * 1000); // every 30 min
     return () => clearInterval(interval);
-  }, []); // ref handles toggle changes
+  }, [signedIn]); // ref handles toggle changes; re-arm once signed in
 };

@@ -3,19 +3,12 @@ import jsQR from "jsqr";
 import { C } from "../tokens/design";
 import { Icon } from "../components/ui";
 import { updateClient } from "../hooks/useFirestore";
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   QR SCANNER MODAL
-   Reads the Jake Barber Studio QR format: "jake-barber-studio:client:<id>"
-   Props:
-     clients   — full clients array (already loaded by ClientsPage)
-     onFound   — (client) called when a match is found
-     onClose   — dismiss without result
-─────────────────────────────────────────────────────────────────────────────── */
+import useScrollLock from "../hooks/useScrollLock";
 
 const SCAN_INTERVAL_MS = 200;
 
 const QRScannerModal = ({ clients = [], onFound, onClose }) => {
+  useScrollLock();
   const videoRef    = useRef(null);
   const canvasRef   = useRef(null);
   const streamRef   = useRef(null);
@@ -29,7 +22,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
   const [hasTorch,    setHasTorch]    = useState(false);
   const [scanLine,    setScanLine]    = useState(0);
 
-  /* ── Animated scan line ───────────────────────────────────────────────── */
   useEffect(() => {
     if (status !== "scanning") return;
     let dir = 1, pos = 0;
@@ -42,19 +34,15 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     return () => clearInterval(id);
   }, [status]);
 
-  /* ── Stop camera ─────────────────────────────────────────────────────── */
   const stopCamera = () => {
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   };
 
-  /* ── Handle decoded QR data ──────────────────────────────────────────── */
-  // Declared BEFORE decode so useCallback can reference it without hoisting issues
   const handleQRData = useCallback((raw) => {
     const PREFIX = "jake-barber-studio:client:";
     if (!raw.startsWith(PREFIX)) {
-      // Scanned a valid QR but not a Jake Barber Studio client card
       stopCamera();
       setErrorMsg(`Unrecognised QR code. Please scan a Jake Barber Studio client card.`);
       setStatus("error");
@@ -65,11 +53,8 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     if (match) {
       stopCamera();
 
-      // Bump visit count +1 and record today's visit date in Firestore.
-      // Update local state immediately (optimistic) so the modal reflects
-      // the new count without waiting on the round trip.
-      const newVisits   = (parseInt(match.visits) || 0) + 1;
-      const todayLabel   = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const newVisits    = (parseInt(match.visits) || 0) + 1;
+      const todayLabel    = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       const updatedClient = { ...match, visits: newVisits, lastVisit: todayLabel };
 
       setFoundClient(updatedClient);
@@ -85,7 +70,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     }
   }, [clients]);
 
-  /* ── Decode loop ─────────────────────────────────────────────────────── */
   const decodeRef = useRef(null);
 
   useEffect(() => {
@@ -120,7 +104,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     rafRef.current = requestAnimationFrame(decodeRef.current);
   }, []);
 
-  /* ── Camera start ────────────────────────────────────────────────────── */
   const startCamera = useCallback(async () => {
     setStatus("starting");
     try {
@@ -147,7 +130,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     }
   }, [startDecode]);
 
-  /* ── Torch toggle ────────────────────────────────────────────────────── */
   const toggleTorch = async () => {
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track) return;
@@ -158,13 +140,9 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
     } catch { /* ignore */ }
   };
 
-  /* ── Lifecycle ───────────────────────────────────────────────────────── */
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { startCamera(); return () => stopCamera(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     RENDER
-  ───────────────────────────────────────────────────────────────────────── */
   return (
     <div
       style={{
@@ -174,11 +152,12 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
         zIndex: 2000,
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 16,
+        overflowY: "auto",
       }}
     >
       <div
         className="card"
-        style={{ width: "100%", maxWidth: 460, borderRadius: 24, overflow: "hidden", display: "flex", flexDirection: "column" }}
+        style={{ width: "100%", maxWidth: 460, borderRadius: 24, overflow: "hidden", display: "flex", flexDirection: "column", margin: "auto" }}
       >
         {/* Header */}
         <div style={{
@@ -216,7 +195,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
         {/* Body */}
         <div style={{ padding: "20px 24px 24px" }}>
 
-          {/* ── Viewfinder ── */}
           {(status === "starting" || status === "scanning") && (
             <div>
               <div style={{
@@ -231,7 +209,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                 />
                 <canvas ref={canvasRef} style={{ display: "none" }} />
 
-                {/* Corner brackets */}
                 {[
                   { top: 20, left: 20,  bTop: true,  bLeft: true  },
                   { top: 20, right: 20, bTop: true,  bRight: true },
@@ -256,7 +233,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                   }} />
                 ))}
 
-                {/* Animated scan line */}
                 {status === "scanning" && (
                   <div style={{
                     position: "absolute",
@@ -270,7 +246,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                   }} />
                 )}
 
-                {/* Starting overlay */}
                 {status === "starting" && (
                   <div style={{
                     position: "absolute", inset: 0,
@@ -289,7 +264,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                   </div>
                 )}
 
-                {/* Torch button */}
                 {hasTorch && status === "scanning" && (
                   <button
                     onClick={toggleTorch}
@@ -314,7 +288,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
             </div>
           )}
 
-          {/* ── No permission ── */}
           {status === "noperm" && (
             <div style={{ textAlign: "center", padding: "28px 0" }}>
               <div style={{
@@ -342,7 +315,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
             </div>
           )}
 
-          {/* ── Error ── */}
           {status === "error" && (
             <div style={{ textAlign: "center", padding: "28px 0" }}>
               <div style={{
@@ -370,7 +342,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
             </div>
           )}
 
-          {/* ── Found ── */}
           {status === "found" && foundClient && (
             <div>
               <div style={{
@@ -384,7 +355,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                 </p>
               </div>
 
-              {/* Client card */}
               <div style={{
                 background: C.surfaceLow, borderRadius: 16, padding: "20px",
                 marginBottom: 20, display: "flex", alignItems: "center", gap: 16,
@@ -430,7 +400,6 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                 )}
               </div>
 
-              {/* Actions */}
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={() => { setFoundClient(null); startCamera(); }}

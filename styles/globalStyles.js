@@ -179,7 +179,7 @@ style.textContent = `
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .fade-up { animation: fadeUp 0.4s ease forwards; }
+  .fade-up { animation: fadeUp 0.4s ease; }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }

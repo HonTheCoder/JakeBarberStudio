@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { C } from "../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../components/ui";
 import useIsMobile from "../hooks/useIsMobile";
+import useScrollLock from "../hooks/useScrollLock";
 import { useSettingsContext } from "../context/useSettingsContext";
 import {
   saveSettings,
-  clearAllTransactions, resetInventoryStock,
   deleteClientsByFilter, useClients,
   addStylist, updateStylist, deleteStylist,
+  wipeData,
 } from "../hooks/useFirestore";
 import { requestNotifPermission, getNotifPermission } from "../hooks/useNotification";
 import { useTOTPStatus, startTOTPEnrollment, finishTOTPEnrollment, unenrollTOTP } from "../hooks/useTOTP";
@@ -92,6 +93,7 @@ const LocalBadge = ({ label, color = C.secondary, bg = C.secondaryContainer }) =
 
 /* ── Confirm Dialog ──────────────────────────────────────────────────────── */
 const ConfirmDialog = ({ title, message, confirmLabel = "Confirm", onConfirm, onClose, danger = true }) => {
+  useScrollLock();
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
 
@@ -108,10 +110,9 @@ const ConfirmDialog = ({ title, message, confirmLabel = "Confirm", onConfirm, on
 
   return (
     <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%", margin: "auto" }}>
         <div style={{ width: 48, height: 48, background: danger ? "#fef2f2" : C.surfaceLow, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Icon name={danger ? "warning" : "info"} size={24} style={{ color: danger ? C.error : C.secondary }} />
         </div>
@@ -145,6 +146,7 @@ const staffInputStyle = {
 };
 
 const StaffEditModal = ({ member, onClose, onSave }) => {
+  useScrollLock();
   const [form, setForm] = useState({ name: member.name, role: member.role, email: member.email, phone: member.phone ?? "", status: member.status, appRole: member.appRole ?? "barber" });
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
@@ -165,8 +167,8 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 500, width: "100%" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 500, width: "100%", margin: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -248,6 +250,7 @@ const getSecondaryAuth = () => {
 };
 
 const CreateAccountModal = ({ onClose, onCreated }) => {
+  useScrollLock();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "", appRole: "barber", jobTitle: "Junior Stylist" });
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
@@ -314,8 +317,8 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto", margin: "auto" }}>
 
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
@@ -437,6 +440,7 @@ const STATUS_COLORS = {
 };
 
 const ClientCleanupModal = ({ onClose }) => {
+  useScrollLock();
   const { data: allClients } = useClients();
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [visitPreset,      setVisitPreset]      = useState(0);
@@ -478,10 +482,9 @@ const ClientCleanupModal = ({ onClose }) => {
 
   return (
     <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 520, width: "100%" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 520, width: "100%", margin: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, background: "#fef2f2", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -589,6 +592,156 @@ const ClientCleanupModal = ({ onClose }) => {
   );
 };
 
+/* ── Data Wipe Modal ─────────────────────────────────────────────────────── */
+const WIPE_CATEGORIES = [
+  { key: "sales",     label: "Sales & Transactions", icon: "receipt_long", desc: "Every transaction record — amounts, barbers, clients, dates." },
+  { key: "reports",   label: "Reports & Stock Logs", icon: "assessment",   desc: "Stock movement / audit history that feeds the Reports page." },
+  { key: "inventory", label: "Inventory",            icon: "inventory_2",  desc: "All products, prices, and stock levels." },
+  { key: "clients",   label: "Client Data",          icon: "group",        desc: "Every client profile, visit count, and spend history." },
+];
+
+const DataWipeModal = ({ onClose }) => {
+  useScrollLock();
+  const [selected, setSelected] = useState([]);
+  const [typed,    setTyped]    = useState("");
+  const [busy,     setBusy]     = useState(false);
+  const [done,     setDone]     = useState(null);
+  const [err,      setErr]      = useState("");
+
+  const allSelected = selected.length === WIPE_CATEGORIES.length;
+  const toggle = key => setSelected(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  const toggleAll = () => setSelected(allSelected ? [] : WIPE_CATEGORIES.map(c => c.key));
+
+  const confirmed = typed.trim() === "DELETE";
+
+  const handleWipe = async () => {
+    if (!selected.length || !confirmed) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const results = await wipeData(selected);
+      setDone(results);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
+    >
+      <div className="card" style={{ padding: 32, maxWidth: 520, width: "100%", margin: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, background: "#fef2f2", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="delete_forever" size={20} style={{ color: C.error }} />
+            </div>
+            <div>
+              <h2 style={{ fontFamily: "Geist", fontSize: 17, fontWeight: 600, color: C.primary }}>Data Wipe</h2>
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>Permanently erase selected data — this cannot be undone</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ padding: 6, borderRadius: 8 }}
+            onMouseOver={e => (e.currentTarget.style.background = C.surfaceLow)}
+            onMouseOut={e => (e.currentTarget.style.background = "transparent")}>
+            <Icon name="close" size={20} style={{ color: C.onSurfaceVariant }} />
+          </button>
+        </div>
+
+        {done ? (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+            </div>
+            <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 10 }}>Data wiped successfully</p>
+            <div style={{ textAlign: "left", background: C.surfaceLow, borderRadius: 12, padding: "14px 18px", marginBottom: 24 }}>
+              {Object.entries(done).map(([cat, count]) => (
+                <div key={cat} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
+                  <span style={{ color: C.onSurfaceVariant }}>{WIPE_CATEGORIES.find(c => c.key === cat)?.label ?? cat}</span>
+                  <span style={{ fontFamily: "Geist", fontWeight: 600, color: C.primary }}>{count} deleted</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant }}>Select data to wipe</p>
+              <button onClick={toggleAll} style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.secondary }}>
+                {allSelected ? "Deselect All" : "Select All"}
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 22 }}>
+              {WIPE_CATEGORIES.map(cat => {
+                const active = selected.includes(cat.key);
+                return (
+                  <button key={cat.key} onClick={() => toggle(cat.key)} style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 14, textAlign: "left",
+                    padding: "12px 14px", borderRadius: 12, marginBottom: 8,
+                    background: active ? "#fef2f2" : C.surfaceLow,
+                    border: `1.5px solid ${active ? C.error + "50" : C.outlineVariant + "30"}`,
+                    transition: "all 0.15s",
+                  }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${active ? C.error : C.outlineVariant}`, background: active ? C.error : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {active && <Icon name="check" size={13} style={{ color: "#fff" }} />}
+                    </div>
+                    <Icon name={cat.icon} size={18} style={{ color: active ? C.error : C.onSurfaceVariant, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: active ? C.error : C.primary }}>{cat.label}</p>
+                      <p style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 1 }}>{cat.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selected.length > 0 && (
+              <div style={{ background: "#fef2f2", border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+                <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.error, marginBottom: 8 }}>
+                  TYPE <span style={{ fontFamily: "monospace", background: `${C.error}15`, padding: "1px 6px", borderRadius: 4 }}>DELETE</span> TO CONFIRM
+                </p>
+                <input
+                  autoFocus
+                  value={typed}
+                  onChange={e => setTyped(e.target.value)}
+                  placeholder="DELETE"
+                  style={{ width: "100%", padding: "9px 14px", background: "#fff", border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, borderRadius: 10, fontFamily: "monospace", fontSize: 14, letterSpacing: "0.06em", boxSizing: "border-box" }}
+                />
+              </div>
+            )}
+
+            {err && <p style={{ color: C.error, fontSize: 13, marginBottom: 12 }}>{err}</p>}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <SecondaryBtn onClick={onClose} disabled={busy}>Cancel</SecondaryBtn>
+              <button
+                onClick={handleWipe}
+                disabled={busy || !selected.length || !confirmed}
+                style={{
+                  padding: "10px 20px", borderRadius: 12,
+                  background: (!selected.length || !confirmed || busy) ? C.outlineVariant : C.error,
+                  color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em",
+                  display: "flex", alignItems: "center", gap: 8,
+                  opacity: (!selected.length || !confirmed || busy) ? 0.6 : 1,
+                }}
+              >
+                {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
+                {busy ? "Wiping…" : `Wipe ${selected.length || ""} Selected`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 /* ── Default shop settings ───────────────────────────────────────────────── */
 const DEFAULT_SHOP = {
   name:          "The Parlour",
@@ -617,6 +770,7 @@ const DEFAULT_NOTIFS = {
  *  3. Verify the 6-digit code
  */
 const TOTPSetupModal = ({ onClose }) => {
+  useScrollLock();
   const [step,     setStep]     = useState("password"); // "password" | "qr" | "verify" | "done"
   const [password, setPassword] = useState("");
   const [code,     setCode]     = useState("");
@@ -677,8 +831,8 @@ const TOTPSetupModal = ({ onClose }) => {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto", margin: "auto" }}>
 
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
@@ -805,6 +959,7 @@ const TOTPSetupModal = ({ onClose }) => {
 
 /* ── TOTP Remove Modal ───────────────────────────────────────────────────── */
 const TOTPRemoveModal = ({ onClose }) => {
+  useScrollLock();
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState("");
   const [done, setDone] = useState(false);
@@ -822,8 +977,8 @@ const TOTPRemoveModal = ({ onClose }) => {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 32, maxWidth: 420, width: "100%" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}>
+      <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%", margin: "auto" }}>
         {done ? (
           <div style={{ textAlign: "center" }}>
             <div style={{ width: 48, height: 48, background: C.surfaceLow, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
@@ -1001,6 +1156,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   const [editingStaff,      setEditingStaff]      = useState(null);
   const [showCreate,        setShowCreate]        = useState(false);
   const [showClientCleanup, setShowClientCleanup] = useState(false);
+  const [showDataWipe,      setShowDataWipe]      = useState(false);
   const [showTOTPSetup,     setShowTOTPSetup]     = useState(false);
   const [showTOTPRemove,    setShowTOTPRemove]    = useState(false);
   const [confirm,           setConfirm]           = useState(null);
@@ -1281,23 +1437,15 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
 
       {/* ── Danger Zone ──────────────────────────────────────────────── */}
       <Section title="Danger Zone" subtitle="Irreversible actions — proceed with caution.">
-        <Row icon="delete_forever" label="Clear All Transactions" subtitle="Permanently removes all transaction and stock movement history">
+        <Row icon="delete_forever" label="Data Wipe" subtitle="Delete all data at once, or pick sales, reports, inventory, or client data individually">
           <button
-            onClick={() => setConfirm({ title: "Clear All Transactions?", message: "This will permanently delete all transaction records and stock movement history. This cannot be undone.", confirmLabel: "Yes, Clear All", action: clearAllTransactions })}
+            onClick={() => setShowDataWipe(true)}
             style={{ padding: "8px 16px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
           >
-            Clear
+            Manage
           </button>
         </Row>
-        <Row icon="reset_wrench" label="Reset Inventory" subtitle="Sets all product stock quantities to zero">
-          <button
-            onClick={() => setConfirm({ title: "Reset Inventory?", message: "This will set the stock quantity of every product to zero and mark them all as out-of-stock. This cannot be undone.", confirmLabel: "Yes, Reset", action: resetInventoryStock })}
-            style={{ padding: "8px 16px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
-          >
-            Reset
-          </button>
-        </Row>
-        <Row icon="group_remove" label="Delete Clients" subtitle="Permanently remove client records by status or visit count" last>
+        <Row icon="group_remove" label="Delete Clients (Filtered)" subtitle="Permanently remove client records by status or visit count" last>
           <button
             onClick={() => setShowClientCleanup(true)}
             style={{ padding: "8px 16px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
@@ -1345,6 +1493,10 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
 
       {showClientCleanup && (
         <ClientCleanupModal onClose={() => setShowClientCleanup(false)} />
+      )}
+
+      {showDataWipe && (
+        <DataWipeModal onClose={() => setShowDataWipe(false)} />
       )}
 
       {showTOTPSetup && (

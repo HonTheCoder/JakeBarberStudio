@@ -4,7 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { C } from "../tokens/design";
-import { KpiCard, SectionTitle, SecondaryBtn } from "../components/ui";
+import { KpiCard, SectionTitle, SecondaryBtn, PrimaryBtn } from "../components/ui";
+import { NewSaleModal } from "../components/modals";
 import { useStats } from "../hooks/useStats";
 import useIsMobile from "../hooks/useIsMobile";
 import { fmt, toNum, parseDate } from "../utils/currency";
@@ -39,6 +40,7 @@ const TOOLTIP_STYLE = { background: "#fff", border: `1px solid ${C.outlineVarian
 /* ── Page ────────────────────────────────────────────────────────────────── */
 const ReportsPage = () => {
   const [revPeriod, setRevPeriod] = useState("Monthly");
+  const [showModal, setShowModal] = useState(false);
   const isMobile = useIsMobile();
   const { stats, loading } = useStats();
 
@@ -186,10 +188,13 @@ const ReportsPage = () => {
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
 
+      {showModal && <NewSaleModal onClose={() => setShowModal(false)} />}
+
       {/* Export actions */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 28, gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 28, gap: 10, flexWrap: "wrap" }}>
         <SecondaryBtn icon="download"   onClick={exportPDF}>Export PDF</SecondaryBtn>
         <SecondaryBtn icon="table_view" onClick={exportCSV}>Export CSV</SecondaryBtn>
+        <PrimaryBtn icon="receipt_long" onClick={() => setShowModal(true)}>New Sale</PrimaryBtn>
       </div>
 
       {/* KPI Row */}

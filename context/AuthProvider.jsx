@@ -6,13 +6,11 @@ import { AuthContext } from "./AuthContext";
 
 export const AuthProvider = ({ children }) => {
   const [user,        setUser]        = useState(null);
-  const [role,        setRole]        = useState(null);   // "admin" | "barber"
-  const [displayName, setDisplayName] = useState(null);   // from users/{uid}.name
+  const [role,        setRole]        = useState(null);
+  const [displayName, setDisplayName] = useState(null);
   const [loading,     setLoading]     = useState(true);
-
-  // MFA challenge state — set when login throws auth/multi-factor-auth-required
-  const [mfaError,   setMfaError]   = useState(null);   // the raw Firebase error
-  const [mfaPending, setMfaPending] = useState(false);  // show TOTP prompt in UI
+  const [mfaError,    setMfaError]    = useState(null);
+  const [mfaPending,  setMfaPending]  = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -27,11 +25,10 @@ export const AuthProvider = ({ children }) => {
             fetchedRole = snap.data().role ?? "barber";
             fetchedName = snap.data().name ?? null;
           } else {
-            // First time this user has logged in — create their profile doc.
-            // Default role is "admin" so the first account gets full access
-            // immediately. Change any subsequent user to "barber" in the
-            // Firebase Console → Firestore → users/{uid} → role field.
-            fetchedRole = "admin";
+            // First login — create the users/{uid} doc so Firestore rules
+            // can resolve getUserData().role. Without this doc, every rule
+            // that calls getUserData() returns undefined and denies all reads.
+            fetchedRole = "admin"; // first account = admin; change others in Firebase Console
             fetchedName = u.displayName ?? u.email?.split("@")[0] ?? null;
             await setDoc(userRef, {
               role:      fetchedRole,
@@ -49,7 +46,6 @@ export const AuthProvider = ({ children }) => {
           setDisplayName(null);
         }
         setUser(u);
-        // Clear any pending MFA state once fully signed in
         setMfaError(null);
         setMfaPending(false);
       } else {
@@ -62,12 +58,6 @@ export const AuthProvider = ({ children }) => {
     return unsub;
   }, []);
 
-  /**
-   * login() — attempts email/password sign-in.
-   * If the account has TOTP enrolled, Firebase throws
-   * auth/multi-factor-auth-required. We catch it here and surface
-   * mfaPending=true + the raw error so LoginPage can show the TOTP prompt.
-   */
   const login = async (email, password) => {
     setMfaError(null);
     setMfaPending(false);
@@ -75,10 +65,8 @@ export const AuthProvider = ({ children }) => {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
       if (err.code === "auth/multi-factor-auth-required") {
-        // Store the error so LoginPage can call resolveTOTPChallenge(mfaError, code)
         setMfaError(err);
         setMfaPending(true);
-        // Re-throw so LoginPage knows to switch to MFA mode
         throw err;
       }
       throw err;
@@ -91,7 +79,6 @@ export const AuthProvider = ({ children }) => {
     return auth.signOut();
   };
 
-  /** Called by LoginPage after user enters their TOTP code */
   const clearMfaState = () => {
     setMfaError(null);
     setMfaPending(false);

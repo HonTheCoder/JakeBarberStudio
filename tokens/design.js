@@ -31,10 +31,10 @@ export const C = {
 // "barber" can only see items explicitly listed in their allowed roles.
 const ALL_NAV_ITEMS = [
   { id: "dashboard",  label: "Dashboard",  icon: "dashboard",    roles: ["admin", "barber"] },
-  { id: "stylists",   label: "Stylists",   icon: "content_cut",  roles: ["admin", "barber"] },
+  { id: "stylists",   label: "Stylists",   icon: "content_cut",  roles: ["admin"] },
+  { id: "profile",    label: "Profile",    icon: "person",       roles: ["admin", "barber"] },
   { id: "clients",    label: "Clients",    icon: "group",        roles: ["admin", "barber"] },
   { id: "inventory",  label: "Inventory",  icon: "inventory_2",  roles: ["admin"] },
-  { id: "sales",      label: "Sales",      icon: "payments",     roles: ["admin"] },
   { id: "reports",    label: "Reports",    icon: "analytics",    roles: ["admin"] },
   { id: "settings",   label: "Settings",   icon: "settings",     roles: ["admin"] },
 ];
@@ -54,9 +54,9 @@ export const navItems = ALL_NAV_ITEMS;
 export const pageMeta = {
   dashboard:  { title: "Dashboard",  subtitle: ""                                                   },
   stylists:   { title: "Stylists",   subtitle: "Manage your team"                                  },
+  profile:    { title: "Profile",    subtitle: "Your earnings and performance"                      },
   clients:    { title: "Clients",    subtitle: "Your client records and history"                    },
   inventory:  { title: "Inventory",  subtitle: "Curate and monitor your premium grooming supplies"  },
-  sales:      { title: "Sales",      subtitle: "Track revenue and transactions"                     },
   reports:    { title: "Reports",    get subtitle() { return `Fiscal Year ${new Date().getFullYear()} Performance Overview`; } },
   settings:   { title: "Settings",   subtitle: "System configuration"                              },
 };

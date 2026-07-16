@@ -18,6 +18,7 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
   const [displayed, setDisplayed] = useState({ title, subtitle });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisible(false);
     const t = setTimeout(() => {
       setDisplayed({ title, subtitle });

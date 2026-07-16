@@ -2,8 +2,8 @@ import { useState, useMemo } from "react";
 import { C } from "../tokens/design";
 import { Icon, SecondaryBtn, ErrorBanner } from "../components/ui";
 import { useStylists, useTransactions } from "../hooks/useFirestore";
-import { fmt } from "../utils/currency";
-import { EditStylistModal, DeleteStylistModal, AddStylistModal } from "../components/modals";
+import { fmt, TIER_DEFAULT_SPLIT } from "../utils/currency";
+import { EditStylistModal, DeleteStylistModal, AddStylistModal, BarberSplitsModal } from "../components/modals";
 import useIsMobile from "../hooks/useIsMobile";
 
 /* ── Status badge ────────────────────────────────────────────────────────── */
@@ -41,6 +41,11 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
           <div>
             <div style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary }}>{stylist.name}</div>
             <div style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>{stylist.role}</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5, padding: "2px 8px", borderRadius: 999, background: C.surfaceLow }}>
+              <span style={{ fontFamily: "Geist", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
+                {stylist.tier ?? "Junior"} · {stylist.splitPercent ?? TIER_DEFAULT_SPLIT[stylist.tier ?? "Junior"]}% split
+              </span>
+            </div>
             {!stylist.uid && (
               <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5, padding: "2px 8px", borderRadius: 999, background: "#fef3c7" }}>
                 <Icon name="warning" size={11} style={{ color: "#92400e" }} />
@@ -148,6 +153,7 @@ const StylistsPage = ({ search = "" }) => {
   const [editTarget, setEditTarget] = useState(null);
   const [delTarget,  setDelTarget]  = useState(null);
   const [showAdd,    setShowAdd]    = useState(false);
+  const [showSplits, setShowSplits] = useState(false);
   const [filter,     setFilter]     = useState("All");
 
   const filters = ["All", "Active", "Inactive"];
@@ -183,9 +189,14 @@ const StylistsPage = ({ search = "" }) => {
             Stylist profiles are created automatically when a barber account is added in Settings.
           </span>
         </div>
-        <SecondaryBtn icon="settings" onClick={() => window.dispatchEvent(new CustomEvent("navigate-settings"))}>
-          Staff Accounts
-        </SecondaryBtn>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <SecondaryBtn icon="percent" onClick={() => setShowSplits(true)}>
+            Barber Splits
+          </SecondaryBtn>
+          <SecondaryBtn icon="settings" onClick={() => window.dispatchEvent(new CustomEvent("navigate-settings"))}>
+            Staff Accounts
+          </SecondaryBtn>
+        </div>
       </div>
 
       {/* KPI strip */}
@@ -266,6 +277,7 @@ const StylistsPage = ({ search = "" }) => {
       {showAdd      && <AddStylistModal                      onClose={() => setShowAdd(null)} />}
       {editTarget && <EditStylistModal   stylist={editTarget} onClose={() => setEditTarget(null)} />}
       {delTarget  && <DeleteStylistModal stylist={delTarget}  onClose={() => setDelTarget(null)} />}
+      {showSplits && <BarberSplitsModal  onClose={() => setShowSplits(false)} />}
     </div>
   );
 };

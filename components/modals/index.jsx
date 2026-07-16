@@ -1,18 +1,21 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { toNum, computeCuts, fmt, BARBER_TIERS, TIER_DEFAULT_SPLIT } from "../../utils/currency";
 import { C } from "../../tokens/design";
 import { Icon, PrimaryBtn, SecondaryBtn } from "../ui";
 import { useToast } from "../../context/ToastContext";
 import useIsMobile from "../../hooks/useIsMobile";
+import useScrollLock from "../../hooks/useScrollLock";
 import { db } from "../../firebase";
 import {
   addClient, updateClient, deleteClient,
   addProduct, updateProduct, deleteProduct, addStockMovement,
   addTransaction, addStylist, updateStylist, deleteStylist,
-  useStylists,
+  useStylists, useClients,
 } from "../../hooks/useFirestore";
 
 /* ─── Shared Overlay ──────────────────────────────────────────────────────── */
@@ -26,22 +29,27 @@ const getSecondaryAuth = () => {
   return getAuth(secondary);
 };
 
-const Overlay = ({ children }) => (
-  <div
-    style={{
-      position: "fixed", inset: 0,
-      background: "rgba(0,0,0,0.45)",
-      backdropFilter: "blur(4px)",
-      zIndex: 1000,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 16,
-    }}
-  >
-    <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-      {children}
-    </div>
-  </div>
-);
+const Overlay = ({ children }) => {
+  useScrollLock();
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+        overflowY: "auto",
+      }}
+    >
+      <div style={{ width: "100%", display: "flex", justifyContent: "center", margin: "auto" }}>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const ModalCard = ({ title, icon, onClose, onSubmit, submitting, children }) => (
   <div className="card" style={{ padding: 32, position: "relative" }}>
@@ -116,16 +124,15 @@ const SectionTitle = ({ children }) => (
   </div>
 );
 
-/* ─── QR Builder (pure JS, no library) ────────────────────────────────────── */
 /* ─── New Client QR Modal — shown after saving a new client ───────────────── */
 export const NewClientQRModal = ({ client, onClose }) => {
+  useScrollLock();
   const canvasRef = useRef(null);
   const [downloaded, setDownloaded] = useState(false);
 
   // Full data string — qrcode library handles any length correctly
   const qrData = `jake-barber-studio:client:${client.id ?? "000"}`;
 
-  // Render QR into the small preview canvas using the real qrcode library
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -177,9 +184,9 @@ export const NewClientQRModal = ({ client, onClose }) => {
     setTimeout(() => setDownloaded(false), 2500);
   };
 
-  return (
+  return createPortal(
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
       <div className="card" style={{ padding: 36, maxWidth: 420, width: "100%", textAlign: "center" }}>
         {/* Success header */}
@@ -250,7 +257,8 @@ export const NewClientQRModal = ({ client, onClose }) => {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -885,18 +893,85 @@ export const NewSaleModal = ({ onClose }) => {
   const { data: stylists = [] } = useStylists();
   const activeBarbers = stylists.filter(s => s.status === "Active");
 
+  const { data: clients = [] } = useClients();
+  const matchedClient = clients.find(
+    c => c.name?.trim().toLowerCase() === form.client.trim().toLowerCase()
+  );
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // When an existing client is picked/typed, prefill their usual barber
+  // (only if the barber field hasn't already been touched by the user).
+  const handleClientChange = e => {
+    const value = e.target.value;
+    setForm(f => {
+      const match = clients.find(c => c.name?.trim().toLowerCase() === value.trim().toLowerCase());
+      if (match && !f.barber && match.barber) {
+        return { ...f, client: value, barber: match.barber };
+      }
+      return { ...f, client: value };
+    });
+  };
+
   const handleSubmit = async () => {
-    if (!form.client.trim()) { setError("Client name is required."); return; }
+    const clientName = form.client.trim();
+    if (!clientName) { setError("Client name is required."); return; }
     if (!form.amount) { setError("Amount is required."); return; }
     setSubmitting(true);
     try {
-      const amount = form.amount.startsWith("₱") ? form.amount : `₱${form.amount}`;
-      const txnId = `TXN-${Date.now().toString().slice(-4)}`;
-      const date = new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
-      await addTransaction({ ...form, amount, txnId, date });
-      success(`Sale recorded — ${amount} for ${form.client.trim()}`);
+      const gross = toNum(form.amount);
+      const barberRecord = activeBarbers.find(s => s.name === form.barber);
+      const { grossAmount, barberCut, adminCut } = computeCuts(gross, {
+        tier: barberRecord?.tier ?? "Junior",
+        splitPercent: barberRecord?.splitPercent,
+      });
+
+      // eslint-disable-next-line react-hooks/purity
+      const txnId      = `TXN-${Date.now().toString().slice(-4)}`;
+      const date        = new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+      const todayLabel  = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const amount      = `₱${grossAmount.toFixed(2)}`;
+
+      // ── Auto-link this sale to the client record ──────────────────────────
+      // Only "Completed" sales count toward visits/spend — a "Refunded" sale
+      // shouldn't bump the client's loyalty stats.
+      const isCompleted = form.status === "Completed";
+      let clientId = matchedClient?.id ?? null;
+
+      if (matchedClient) {
+        if (isCompleted) {
+          const newVisits = (parseInt(matchedClient.visits) || 0) + 1;
+          const newSpent  = fmt(toNum(matchedClient.spent) + grossAmount);
+          await updateClient(matchedClient.id, {
+            visits: newVisits,
+            spent: newSpent,
+            lastVisit: todayLabel,
+            barber: form.barber || matchedClient.barber || "",
+            haircutStyle: form.service || matchedClient.haircutStyle || "",
+            status: matchedClient.status === "New" && newVisits >= 2 ? "Regular" : matchedClient.status,
+          });
+        }
+      } else {
+        // No existing client matches this name — create one automatically
+        // so every sale always has a linked client record.
+        const initials = clientName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+        const newClientRef = await addClient({
+          name: clientName,
+          phone: "",
+          status: "New",
+          barber: form.barber || "",
+          haircutStyle: form.service || "",
+          beardStyle: "None",
+          visits: isCompleted ? 1 : 0,
+          spent: isCompleted ? fmt(grossAmount) : fmt(0),
+          lastVisit: isCompleted ? todayLabel : "",
+          initials,
+        });
+        clientId = newClientRef?.id ?? null;
+      }
+
+      await addTransaction({ ...form, client: clientName, clientId, amount, grossAmount, barberCut, adminCut, txnId, date });
+      success(`Sale recorded — ₱${grossAmount.toFixed(2)} for ${clientName}${matchedClient ? "" : " (new client added)"}`);
       onClose();
     } catch (e) {
       setError(e.message);
@@ -911,7 +986,24 @@ export const NewSaleModal = ({ onClose }) => {
       <ModalCard title="New Sale" icon="receipt_long" onClose={onClose} onSubmit={handleSubmit} submitting={submitting}>
         {error && <p style={{ color: C.error, fontSize: 13, marginBottom: 16 }}>{error}</p>}
         <Field label="Client Name *">
-          <input style={inputStyle} placeholder="e.g. Alexander Reid" value={form.client} onChange={set("client")} />
+          <input
+            style={inputStyle}
+            placeholder="e.g. Alexander Reid"
+            value={form.client}
+            onChange={handleClientChange}
+            list="new-sale-client-options"
+            autoComplete="off"
+          />
+          <datalist id="new-sale-client-options">
+            {clients.map(c => <option key={c.id} value={c.name} />)}
+          </datalist>
+          {form.client.trim() && (
+            <p style={{ fontFamily: "Geist", fontSize: 11, color: matchedClient ? C.secondary : C.onSurfaceVariant, marginTop: 6 }}>
+              {matchedClient
+                ? `Existing client — visit #${(parseInt(matchedClient.visits) || 0) + 1} will be recorded`
+                : "New client — a client record will be created automatically"}
+            </p>
+          )}
         </Field>
         <Field label="Service">
           <select style={selectStyle} value={form.service} onChange={set("service")}>
@@ -950,7 +1042,7 @@ const ALL_SERVICES = ["Executive Cut", "Hot Towel Shave", "Beard Sculpting", "Fa
 
 export const AddStylistModal = ({ onClose }) => {
   const { success, error: toastError } = useToast();
-  const [form, setForm] = useState({ name: "", role: ROLES[0], phone: "", email: "", status: "Active", specialties: [] });
+  const [form, setForm] = useState({ name: "", role: ROLES[0], phone: "", email: "", status: "Active", specialties: [], tier: "Junior", splitPercent: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -968,7 +1060,8 @@ export const AddStylistModal = ({ onClose }) => {
     setSubmitting(true);
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-      await addStylist({ ...form, initials });
+      const splitPercent = form.splitPercent === "" ? null : Math.min(100, Math.max(0, Number(form.splitPercent)));
+      await addStylist({ ...form, splitPercent, initials });
       success(`Stylist "${form.name.trim()}" added`);
       onClose();
     } catch (e) {
@@ -1004,6 +1097,16 @@ export const AddStylistModal = ({ onClose }) => {
         <Field label="Phone">
           <input style={inputStyle} placeholder="e.g. +1 (555) 200-0001" value={form.phone} onChange={set("phone")} />
         </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="Experience Tier">
+            <select style={selectStyle} value={form.tier} onChange={set("tier")}>
+              {BARBER_TIERS.map(t => <option key={t} value={t}>{t} ({TIER_DEFAULT_SPLIT[t]}% default)</option>)}
+            </select>
+          </Field>
+          <Field label="Custom Split % (optional)">
+            <input style={inputStyle} type="number" min="0" max="100" placeholder={`Default ${TIER_DEFAULT_SPLIT[form.tier]}%`} value={form.splitPercent} onChange={set("splitPercent")} />
+          </Field>
+        </div>
         <Field label="Specialties">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {ALL_SERVICES.map(sp => {
@@ -1036,6 +1139,8 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     email:       stylist.email       ?? "",
     status:      stylist.status      ?? "Active",
     specialties: stylist.specialties ?? [],
+    tier:        stylist.tier        ?? "Junior",
+    splitPercent: stylist.splitPercent != null ? String(stylist.splitPercent) : "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1043,7 +1148,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
   // ── App Access (Firestore users/{uid}.role) — only relevant if linked ──
   const hasLogin = !!stylist.uid;
   const [appRole, setAppRole] = useState("barber");
-  const [appRoleLoading, setAppRoleLoading] = useState(hasLogin); // true only while fetching an existing login's role
+  const [appRoleLoading, setAppRoleLoading] = useState(hasLogin);
 
   useEffect(() => {
     if (!hasLogin) return;
@@ -1081,13 +1186,12 @@ export const EditStylistModal = ({ stylist, onClose }) => {
         uid,
         name:      form.name.trim(),
         email:     form.email.trim().toLowerCase(),
-        role:      loginForm.appRole, // "admin" | "barber" — controls Firestore access
+        role:      loginForm.appRole,
         jobTitle:  form.role,
         status:    form.status,
         createdAt: new Date().toISOString(),
       });
 
-      // Link this stylist card to the new account
       await updateStylist(stylist.id, { uid, email: form.email.trim().toLowerCase() });
 
       setLoginDone(true);
@@ -1119,9 +1223,9 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     setSubmitting(true);
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-      await updateStylist(stylist.id, { ...form, initials });
+      const splitPercent = form.splitPercent === "" ? null : Math.min(100, Math.max(0, Number(form.splitPercent)));
+      await updateStylist(stylist.id, { ...form, splitPercent, initials });
 
-      // Sync App Access if this stylist has a linked login
       if (hasLogin) {
         await setDoc(doc(db, "users", stylist.uid), { role: appRole }, { merge: true });
       }
@@ -1255,6 +1359,16 @@ export const EditStylistModal = ({ stylist, onClose }) => {
         <Field label="Phone">
           <input style={inputStyle} value={form.phone} onChange={set("phone")} />
         </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Field label="Experience Tier">
+            <select style={selectStyle} value={form.tier} onChange={set("tier")}>
+              {BARBER_TIERS.map(t => <option key={t} value={t}>{t} ({TIER_DEFAULT_SPLIT[t]}% default)</option>)}
+            </select>
+          </Field>
+          <Field label="Custom Split % (optional)">
+            <input style={inputStyle} type="number" min="0" max="100" placeholder={`Default ${TIER_DEFAULT_SPLIT[form.tier]}%`} value={form.splitPercent} onChange={set("splitPercent")} />
+          </Field>
+        </div>
         <Field label="Specialties">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {ALL_SERVICES.map(sp => {
@@ -1306,5 +1420,132 @@ export const DeleteStylistModal = ({ stylist, onClose }) => {
       deleting={deleting}
       error={error}
     />
+  );
+};
+
+/* ─── Barber Splits Modal ──────────────────────────────────────────────────── */
+// Lists every barber so the admin can set their experience tier and a custom
+// commission split % in one place. Whatever is saved here is what NewSaleModal
+// and the barber's Profile → Submit Daily Income use to calculate cuts.
+const BarberSplitRow = ({ barber, onSave }) => {
+  const [tier, setTier]   = useState(barber.tier ?? "Junior");
+  const [split, setSplit] = useState(barber.splitPercent != null ? String(barber.splitPercent) : "");
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  const dirty = tier !== (barber.tier ?? "Junior") || split !== (barber.splitPercent != null ? String(barber.splitPercent) : "");
+  const effectivePct = split !== "" ? Math.min(100, Math.max(0, Number(split) || 0)) : TIER_DEFAULT_SPLIT[tier];
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const splitPercent = split === "" ? null : Math.min(100, Math.max(0, Number(split)));
+      await onSave(barber.id, { tier, splitPercent });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, background: C.surfaceLow, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.secondaryContainer, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Geist", fontSize: 13, fontWeight: 700, color: C.secondary, flexShrink: 0 }}>
+        {barber.initials ?? barber.name?.slice(0, 2).toUpperCase()}
+      </div>
+      <div style={{ flex: "1 1 140px", minWidth: 120 }}>
+        <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.primary }}>{barber.name}</p>
+        <p style={{ fontSize: 11, color: C.onSurfaceVariant, marginTop: 1 }}>{barber.role || "Barber"}</p>
+      </div>
+      <select value={tier} onChange={e => setTier(e.target.value)} style={{ ...selectStyle, width: 110, padding: "8px 10px", fontSize: 12 }}>
+        {BARBER_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+      </select>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <input
+          type="number" min="0" max="100"
+          placeholder={`${TIER_DEFAULT_SPLIT[tier]}`}
+          value={split}
+          onChange={e => setSplit(e.target.value)}
+          style={{ ...inputStyle, width: 64, padding: "8px 10px", fontSize: 12, textAlign: "center" }}
+        />
+        <span style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant }}>%</span>
+      </div>
+      <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, minWidth: 92 }}>
+        {effectivePct}/{100 - effectivePct} split
+      </span>
+      <button
+        onClick={handleSave}
+        disabled={saving || !dirty}
+        style={{
+          padding: "7px 14px", borderRadius: 8,
+          background: saved ? "#dcfce7" : (!dirty ? C.outlineVariant : C.primary),
+          color: saved ? "#166534" : "#fff",
+          fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em",
+          opacity: (!dirty || saving) && !saved ? 0.6 : 1,
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+      >
+        {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+      </button>
+    </div>
+  );
+};
+
+export const BarberSplitsModal = ({ onClose }) => {
+  const { error: toastError, success } = useToast();
+  const { data: stylists = [], loading } = useStylists();
+
+  const handleSave = async (id, patch) => {
+    try {
+      await updateStylist(id, patch);
+      success("Barber split updated");
+    } catch (e) {
+      toastError(e.message || "Failed to save split — please try again");
+      throw e;
+    }
+  };
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="card" style={{ padding: 32, maxWidth: 640, width: "100%", maxHeight: "88vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, background: C.surfaceLow, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="percent" size={20} style={{ color: C.primary }} />
+            </div>
+            <div>
+              <h2 style={{ fontFamily: "Geist", fontSize: 17, fontWeight: 600, color: C.primary }}>Barber Splits</h2>
+              <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>
+                Set each barber's tier and commission split — applied automatically to every sale
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ padding: 6, borderRadius: 8 }}
+            onMouseOver={e => (e.currentTarget.style.background = C.surfaceLow)}
+            onMouseOut={e => (e.currentTarget.style.background = "transparent")}>
+            <Icon name="close" size={20} style={{ color: C.onSurfaceVariant }} />
+          </button>
+        </div>
+
+        <div style={{ background: C.surfaceLow, borderRadius: 10, padding: "10px 14px", marginBottom: 18, display: "flex", gap: 8, alignItems: "center" }}>
+          <Icon name="info" size={15} style={{ color: C.onSurfaceVariant, flexShrink: 0 }} />
+          <p style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.5 }}>
+            Leave the split % blank to use the tier default — Junior {TIER_DEFAULT_SPLIT.Junior}%, Senior {TIER_DEFAULT_SPLIT.Senior}%, Head {TIER_DEFAULT_SPLIT.Head}% (barber's share of gross).
+          </p>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 40, color: C.onSurfaceVariant, fontFamily: "Geist", fontSize: 13 }}>Loading barbers…</div>
+        ) : stylists.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 40, color: C.onSurfaceVariant, fontFamily: "Geist", fontSize: 13 }}>No barbers yet — add one in Staff Accounts first.</div>
+        ) : (
+          stylists.map(s => <BarberSplitRow key={s.id} barber={s} onSave={handleSave} />)
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+          <SecondaryBtn onClick={onClose}>Done</SecondaryBtn>
+        </div>
+      </div>
+    </Overlay>
   );
 };

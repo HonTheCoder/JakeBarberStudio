@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import QRCode from "qrcode";
 import useIsMobile from "../hooks/useIsMobile";
+import useScrollLock from "../hooks/useScrollLock";
 import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
 import { Badge, Icon, PrimaryBtn, SecondaryBtn, ErrorBanner } from "../components/ui";
@@ -255,6 +256,7 @@ const BrandedQRCard = ({ client }) => {
    CLIENT DETAIL MODAL — full profile, visit history, QR code
 ───────────────────────────────────────────────────────────────────────────── */
 const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab = "profile" }) => {
+  useScrollLock();
   const [tab, setTab] = useState(initialTab); // "profile" | "history" | "qr"
   const visitHistory = Array.isArray(client.visitHistory) ? client.visitHistory : [];
 
@@ -266,9 +268,9 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
-      <div className="card" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="card" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", margin: "auto" }}>
 
         {/* Header */}
         <div style={{ padding: "24px 28px 0", borderBottom: `1px solid ${C.outlineVariant}20` }}>

@@ -155,7 +155,7 @@ export const useStats = () => {
       })
       .sort((a, b) => b._revenue - a._revenue)
       .slice(0, 3)
-      .map(({ _revenue, ...rest }) => rest);
+      .map(t => { const { _revenue, ...rest } = t; void _revenue; return rest; });
 
     /* ── Month-on-month growth ────────────────────────────────────────────── */
     const monthlyGrowth = revenueData.map((d, i, arr) => ({

@@ -69,7 +69,7 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerO
       </div>
 
       {/* Nav Items — filtered by role */}
-      <nav style={{ flex: 1, overflow: "hidden", padding: (collapsed && !isMobile) ? "0 12px" : "0 12px" }}>
+      <nav style={{ flex: 1, overflow: "hidden", padding: "0 12px" }}>
         {visibleItems.map(item => {
           const isActive = active === item.id;
           return (

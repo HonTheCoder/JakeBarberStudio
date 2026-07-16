@@ -33,7 +33,6 @@ const InventoryPage = () => (
         marginBottom: 24, position: "relative", overflow: "hidden",
       }}
     >
-      {/* decorative blob */}
       <div style={{
         position: "absolute", top: -60, right: -60,
         width: 260, height: 260, borderRadius: "50%",
@@ -70,7 +69,6 @@ const InventoryPage = () => (
         </div>
       </div>
 
-      {/* Progress bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: C.onSurfaceVariant, letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -91,10 +89,8 @@ const InventoryPage = () => (
       </div>
     </div>
 
-    {/* Two-col grid */}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
 
-      {/* Milestones */}
       <div className="glass" style={{ borderRadius: 20, padding: "28px 28px 24px" }}>
         <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 18 }}>
           Milestones
@@ -124,7 +120,6 @@ const InventoryPage = () => (
         </div>
       </div>
 
-      {/* Planned features */}
       <div className="glass" style={{ borderRadius: 20, padding: "28px 28px 24px" }}>
         <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 18 }}>
           Planned Features
@@ -144,13 +139,12 @@ const InventoryPage = () => (
                 <p style={{ fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4 }}>{f.desc}</p>
               </div>
             </div>
-          ))}
+          ))} 
         </div>
       </div>
 
     </div>
 
-    {/* ETA footer */}
     <div style={{
       display: "flex", alignItems: "center", gap: 10,
       padding: "14px 20px", borderRadius: 14,
