@@ -36,7 +36,7 @@ const InventoryPage = () => (
       <div style={{
         position: "absolute", top: -60, right: -60,
         width: 260, height: 260, borderRadius: "50%",
-        background: `${C.primary}08`, pointerEvents: "none",
+        background: `${C.accent}10`, pointerEvents: "none",
       }} />
 
       <div style={{ display: "flex", alignItems: "flex-start", gap: 20, marginBottom: 28 }}>
@@ -63,7 +63,7 @@ const InventoryPage = () => (
             </span>
           </div>
           <p style={{ color: C.onSurfaceVariant, fontSize: 14, lineHeight: 1.6, maxWidth: 520 }}>
-            Full stock control for The Parlour — track products, manage suppliers, and get
+            Full stock control for Jake Barber Studio — track products, manage suppliers, and get
             low-stock alerts before you run out mid-service.
           </p>
         </div>
@@ -82,7 +82,7 @@ const InventoryPage = () => (
           <div style={{
             height: "100%", borderRadius: 999,
             width: `${pct}%`,
-            background: `linear-gradient(90deg, ${C.primary}, ${C.secondary})`,
+            background: `linear-gradient(90deg, ${C.accent}, ${C.secondary})`,
             transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
           }} />
         </div>

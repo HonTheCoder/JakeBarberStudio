@@ -1,11 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  verifyBeforeUpdateEmail,
+  updatePassword,
+} from "firebase/auth";
+import { db, auth } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useStylists } from "../hooks/useFirestore";
 import { C } from "../tokens/design";
 import { Icon } from "../components/ui";
 import useScrollLock from "../hooks/useScrollLock";
+import useIsMobile from "../hooks/useIsMobile";
 import { fmt, phpRound, computeCuts, toNum, TIER_DEFAULT_SPLIT } from "../utils/currency";
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -143,7 +150,7 @@ const SubmitIncomeModal = ({ barberName, barberSplit, displayLabel, onClose, onS
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               {[
                 { label: "Gross",              value: fmt(preview.grossAmount), color: C.primary },
-                { label: `Your ${rate}%`,      value: fmt(preview.barberCut),   color: "#16a34a" },
+                { label: `Your ${rate}%`,      value: fmt(preview.barberCut),   color: "var(--badge-success-fg)" },
                 ...(!isAdmin ? [{ label: `Admin ${100-rate}%`, value: fmt(preview.adminCut), color: C.onSurfaceVariant }] : []),
               ].map(row => (
                 <div key={row.label} style={{ textAlign: "center" }}>
@@ -173,160 +180,17 @@ const SubmitIncomeModal = ({ barberName, barberSplit, displayLabel, onClose, onS
             disabled={submitting || !grossInput}
             style={{
               flex: 2, padding: "11px 0", borderRadius: 12,
-              background: C.primary, color: "#fff",
+              background: C.primary, color: C.onPrimary,
               fontFamily: "Geist", fontSize: 12, fontWeight: 600,
               letterSpacing: "0.06em", textTransform: "uppercase",
               opacity: (submitting || !grossInput) ? 0.6 : 1,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}
           >
-            <Icon name={submitting ? "hourglass_empty" : "check"} size={15} style={{ color: "#fff" }} />
+            <Icon name={submitting ? "hourglass_empty" : "check"} size={15} style={{ color: C.onPrimary }} />
             {submitting ? "Saving…" : "Submit & Split"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-};
-
-/* ─── Inline Calendar ────────────────────────────────────────────────────── */
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-const InlineCalendar = ({ txns }) => {
-  const today = new Date();
-  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-
-  const year  = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
-
-  // Build a map: "YYYY-MM-DD" → [txns]
-  const txnsByDay = useMemo(() => {
-    const map = {};
-    txns.forEach(t => {
-      const d = t.createdAt?.toDate?.() ?? (t.date ? new Date(t.date) : null);
-      if (!d || isNaN(d)) return;
-      const key = d.toISOString().slice(0, 10);
-      if (!map[key]) map[key] = [];
-      map[key].push(t);
-    });
-    return map;
-  }, [txns]);
-
-  // Build calendar grid
-  const firstDay = new Date(year, month, 1).getDay();      // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const todayKey = today.toISOString().slice(0, 10);
-
-  return (
-    <div className="card" style={{ padding: "24px 28px", marginTop: 24 }}>
-      {/* Calendar header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <button
-          onClick={prevMonth}
-          style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: C.surfaceLow }}
-          onMouseOver={e => (e.currentTarget.style.background = C.surfaceHigh)}
-          onMouseOut={e => (e.currentTarget.style.background = C.surfaceLow)}
-        >
-          <Icon name="chevron_left" size={18} style={{ color: C.onSurfaceVariant }} />
-        </button>
-        <p style={{ fontFamily: "Geist", fontSize: 15, fontWeight: 700, color: C.primary }}>
-          {MONTHS[month]} {year}
-        </p>
-        <button
-          onClick={nextMonth}
-          disabled={year === today.getFullYear() && month === today.getMonth()}
-          style={{
-            width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
-            background: C.surfaceLow,
-            opacity: (year === today.getFullYear() && month === today.getMonth()) ? 0.3 : 1,
-          }}
-          onMouseOver={e => (e.currentTarget.style.background = C.surfaceHigh)}
-          onMouseOut={e => (e.currentTarget.style.background = C.surfaceLow)}
-        >
-          <Icon name="chevron_right" size={18} style={{ color: C.onSurfaceVariant }} />
-        </button>
-      </div>
-
-      {/* Day headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
-        {DAYS.map(d => (
-          <div key={d} style={{ textAlign: "center", fontFamily: "Geist", fontSize: 10, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: "0.06em", padding: "4px 0" }}>
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Day cells */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-        {cells.map((day, i) => {
-          if (!day) return <div key={`empty-${i}`} />;
-
-          const dateKey  = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const dayTxns  = txnsByDay[dateKey] ?? [];
-          const isToday  = dateKey === todayKey;
-          const hasTxns  = dayTxns.length > 0;
-          const totalCut = dayTxns.reduce((s, t) => s + (Number(t.barberCut) || 0), 0);
-
-          return (
-            <div
-              key={dateKey}
-              title={hasTxns ? `${dayTxns.length} transaction${dayTxns.length > 1 ? "s" : ""} · ₱${totalCut.toFixed(2)}` : ""}
-              style={{
-                borderRadius: 10, padding: "8px 4px",
-                textAlign: "center", cursor: hasTxns ? "default" : "default",
-                background: isToday ? C.primary : hasTxns ? `${C.primary}14` : "transparent",
-                border: isToday ? "none" : hasTxns ? `1.5px solid ${C.primary}30` : "1.5px solid transparent",
-                transition: "background 0.15s",
-              }}
-            >
-              <p style={{
-                fontFamily: "Geist", fontSize: 12,
-                fontWeight: isToday ? 800 : hasTxns ? 700 : 400,
-                color: isToday ? "#fff" : hasTxns ? C.primary : C.onSurfaceVariant,
-                lineHeight: 1,
-              }}>
-                {day}
-              </p>
-              {hasTxns && !isToday && (
-                <div style={{ display: "flex", justifyContent: "center", gap: 2, marginTop: 4 }}>
-                  {dayTxns.slice(0, 3).map((_, di) => (
-                    <div key={di} style={{ width: 4, height: 4, borderRadius: "50%", background: C.primary }} />
-                  ))}
-                </div>
-              )}
-              {hasTxns && isToday && (
-                <div style={{ display: "flex", justifyContent: "center", gap: 2, marginTop: 4 }}>
-                  {dayTxns.slice(0, 3).map((_, di) => (
-                    <div key={di} style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.7)" }} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.outlineVariant}20` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.primary }} />
-          <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant }}>Income submitted</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 3, background: C.primary }} />
-          <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant }}>Today</span>
-        </div>
-        <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginLeft: "auto" }}>
-          Hover a date to see details
-        </span>
       </div>
     </div>
   );
@@ -350,10 +214,183 @@ const KpiCard = ({ icon, label, value, sub, accent }) => (
   </div>
 );
 
+/* ─── Account Security card (self-service email / password) ────────────────
+ * Firebase Auth only lets a user change their OWN email/password from the
+ * client SDK, and requires a recent sign-in to do it — hence the current-
+ * password reauth step below. This is why admin can't edit someone else's
+ * login email from the Staff/Stylists pages; each person must do it here.
+ */
+/* Password input with a show/hide eye toggle */
+const PasswordField = ({ label, value, onChange }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>{label}</label>
+      <div style={{ position: "relative" }}>
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={onChange}
+          autoComplete="current-password"
+          style={{ width: "100%", padding: "10px 40px 10px 14px", borderRadius: 10, border: `1px solid ${C.outlineVariant}`, background: C.surfaceLow, fontFamily: "Geist", fontSize: 13, color: C.primary }}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(s => !s)}
+          aria-label={show ? "Hide password" : "Show password"}
+          style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", borderRadius: 8 }}
+        >
+          <Icon name={show ? "visibility_off" : "visibility"} size={18} style={{ color: C.onSurfaceVariant }} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const AccountSecurityCard = () => {
+  const { user } = useAuth();
+  const [mode,       setMode]       = useState(null); // null | "email" | "password"
+  const [currentPw,  setCurrentPw]  = useState("");
+  const [newEmail,   setNewEmail]   = useState(user?.email ?? "");
+  const [newPw,       setNewPw]      = useState("");
+  const [confirmPw,   setConfirmPw]  = useState("");
+  const [busy,        setBusy]       = useState(false);
+  const [error,        setError]      = useState("");
+  const [justSaved,    setJustSaved]  = useState("");
+
+  const resetForm = () => {
+    setMode(null);
+    setCurrentPw("");
+    setNewEmail(user?.email ?? "");
+    setNewPw("");
+    setConfirmPw("");
+    setError("");
+  };
+
+  const friendlyError = (e) => ({
+    "auth/wrong-password":         "That current password is incorrect.",
+    "auth/invalid-credential":     "That current password is incorrect.",
+    "auth/requires-recent-login":  "For security, please sign out and back in, then try again.",
+    "auth/email-already-in-use":   "That email is already registered to another account.",
+    "auth/invalid-email":          "Invalid email address.",
+    "auth/weak-password":          "New password is too weak (minimum 6 characters).",
+  }[e.code] || e.message || "Something went wrong — please try again.");
+
+  const reauth = async () => {
+    if (!currentPw) throw { code: "auth/wrong-password" };
+    const cred = EmailAuthProvider.credential(user.email, currentPw);
+    await reauthenticateWithCredential(auth.currentUser, cred);
+  };
+
+  const handleSaveEmail = async () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || trimmed === user.email) { setError("Enter a new, different email."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await reauth();
+      // Firebase deprecated the old instant updateEmail() for security reasons.
+      // This sends a real confirmation email to the NEW address; the login
+      // email only actually changes once that link is clicked. Firestore gets
+      // synced automatically on next login (see AuthProvider).
+      await verifyBeforeUpdateEmail(auth.currentUser, trimmed);
+      setJustSaved(`Confirmation link sent to ${trimmed}. Your login stays on ${user.email} until you open that email and click the link.`);
+      resetForm();
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSavePassword = async () => {
+    if (newPw.length < 6) { setError("New password must be at least 6 characters."); return; }
+    if (newPw !== confirmPw) { setError("Passwords do not match."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await reauth();
+      await updatePassword(auth.currentUser, newPw);
+      setJustSaved("Password updated.");
+      resetForm();
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: "24px 28px", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: mode ? 20 : 0 }}>
+        <div>
+          <p style={{ fontFamily: "Geist", fontSize: 14, fontWeight: 700, color: C.primary, marginBottom: 3 }}>Account Security</p>
+          <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant }}>
+            Login email: <strong>{user?.email}</strong>
+          </p>
+        </div>
+        {!mode && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { resetForm(); setMode("email"); }} style={{ padding: "8px 16px", borderRadius: 10, background: C.surfaceLow, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.primary }}>
+              Change Email
+            </button>
+            <button onClick={() => { resetForm(); setMode("password"); }} style={{ padding: "8px 16px", borderRadius: 10, background: C.surfaceLow, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.primary }}>
+              Change Password
+            </button>
+          </div>
+        )}
+      </div>
+
+      {justSaved && !mode && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--badge-success-bg)", border: "1px solid var(--badge-success-fg)", borderRadius: 10, padding: "10px 14px", marginTop: 16 }}>
+          <Icon name="check_circle" size={16} style={{ color: "var(--badge-success-fg)", flexShrink: 0 }} />
+          <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "var(--badge-success-fg)" }}>{justSaved}</span>
+        </div>
+      )}
+
+      {mode === "email" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>New Email</label>
+            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.outlineVariant}`, background: C.surfaceLow, fontFamily: "Geist", fontSize: 13, color: C.primary }} />
+          </div>
+          <PasswordField label="Current Password (to confirm it's you)" value={currentPw} onChange={e => setCurrentPw(e.target.value)} />
+          {error && <p style={{ color: C.error, fontSize: 12, fontFamily: "Geist" }}>{error}</p>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={resetForm} style={{ padding: "9px 16px", borderRadius: 10, background: C.surfaceLow, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant }}>Cancel</button>
+            <button onClick={handleSaveEmail} disabled={busy} style={{ padding: "9px 16px", borderRadius: 10, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 11, fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "Saving…" : "Save Email"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "password" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <PasswordField label="Current Password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <PasswordField label="New Password" value={newPw} onChange={e => setNewPw(e.target.value)} />
+            <PasswordField label="Confirm New Password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} />
+          </div>
+          {error && <p style={{ color: C.error, fontSize: 12, fontFamily: "Geist" }}>{error}</p>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={resetForm} style={{ padding: "9px 16px", borderRadius: 10, background: C.surfaceLow, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.onSurfaceVariant }}>Cancel</button>
+            <button onClick={handleSavePassword} disabled={busy} style={{ padding: "9px 16px", borderRadius: 10, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 11, fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "Saving…" : "Save Password"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 const ProfilePage = () => {
   const { user, role, displayName } = useAuth();
   const { data: stylists } = useStylists();
+  const isMobile = useIsMobile();
 
   // ── Find this barber's stylist record (by uid link or name) ───────────
   const myStylist = useMemo(() => {
@@ -442,13 +479,13 @@ const ProfilePage = () => {
   }, []);
 
   const rate    = isAdmin ? 100 : (barberSplit.splitPercent ?? TIER_DEFAULT_SPLIT[barberTier] ?? 50);
-  const TIER_COLORS = { Junior: { bg: C.surfaceLow, color: C.onSurfaceVariant }, Senior: { bg: "#fef3c7", color: "#92400e" }, Head: { bg: "#ede9fe", color: "#5b21b6" } };
+  const TIER_COLORS = { Junior: { bg: C.surfaceLow, color: C.onSurfaceVariant }, Senior: { bg: "var(--badge-warning-bg)", color: "var(--badge-warning-fg)" }, Head: { bg: "var(--badge-info-bg)", color: "var(--badge-info-fg)" } };
   const tierBg  = isAdmin ? C.primaryContainer : (TIER_COLORS[barberTier]?.bg ?? C.surfaceLow);
   const tierCol = isAdmin ? C.onPrimaryContainer : (TIER_COLORS[barberTier]?.color ?? C.onSurfaceVariant);
   const tierLabel = isAdmin ? "Admin" : displayLabel;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
 
       {/* ── Profile header card ─────────────────────────────────────── */}
       <div className="card" style={{ padding: "28px 32px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
@@ -477,7 +514,7 @@ const ProfilePage = () => {
           style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "12px 24px", borderRadius: 14,
-            background: C.primary, color: "#fff",
+            background: C.primary, color: C.onPrimary,
             fontFamily: "Geist", fontSize: 12, fontWeight: 700,
             letterSpacing: "0.06em", textTransform: "uppercase",
             boxShadow: `0 4px 14px ${C.primary}40`,
@@ -486,21 +523,24 @@ const ProfilePage = () => {
           onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
           onMouseOut={e => (e.currentTarget.style.opacity = "1")}
         >
-          <Icon name="add_circle" size={18} style={{ color: "#fff" }} />
+          <Icon name="add_circle" size={18} style={{ color: C.onPrimary }} />
           Submit Daily Income
         </button>
       </div>
+
+      {/* ── Account Security (self-service email / password) ──────────── */}
+      <AccountSecurityCard />
 
       {/* ── Success toast ────────────────────────────────────────────── */}
       {lastSubmitted && (
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "12px 18px", borderRadius: 12, marginBottom: 20,
-          background: "#dcfce7", border: "1px solid #86efac",
+          background: "var(--badge-success-bg)", border: "1px solid var(--badge-success-fg)",
           animation: "fadeUp 0.3s ease",
         }}>
-          <Icon name="check_circle" size={18} style={{ color: "#16a34a", flexShrink: 0 }} />
-          <span style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: "#15803d" }}>
+          <Icon name="check_circle" size={18} style={{ color: "var(--badge-success-fg)", flexShrink: 0 }} />
+          <span style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: "var(--badge-success-fg)" }}>
             Recorded — Gross {fmt(lastSubmitted.grossAmount)} · Your cut {fmt(lastSubmitted.barberCut)} · Admin {fmt(lastSubmitted.adminCut)}
           </span>
         </div>
@@ -515,7 +555,7 @@ const ProfilePage = () => {
           <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 12 }}>
             Gross Income
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
             <KpiCard icon="today"          label="Today"       value={fmt(todayIncome)}  sub="Gross collected today"       accent={C.primary} />
             <KpiCard icon="date_range"     label="This Week"   value={fmt(weekIncome)}   sub="Current calendar week"       />
             <KpiCard icon="calendar_month" label="This Month"  value={fmt(monthIncome)}  sub={new Date().toLocaleString("en-PH", { month: "long", year: "numeric" })} />
@@ -525,10 +565,10 @@ const ProfilePage = () => {
           <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 12 }}>
             {isAdmin ? "Your Income (100%)" : `Your Earnings (${rate}% cut)`}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
-            <KpiCard icon="payments" label="Today"      value={fmt(todayBarberCut)} sub="Your take home today"  accent="#16a34a" />
-            <KpiCard icon="payments" label="This Week"  value={fmt(weekBarberCut)}  sub="Your weekly take home" accent="#16a34a" />
-            <KpiCard icon="payments" label="This Month" value={fmt(monthBarberCut)} sub="Your monthly take home" accent="#16a34a" />
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+            <KpiCard icon="payments" label="Today"      value={fmt(todayBarberCut)} sub="Your take home today"  accent="var(--badge-success-fg)" />
+            <KpiCard icon="payments" label="This Week"  value={fmt(weekBarberCut)}  sub="Your weekly take home" accent="var(--badge-success-fg)" />
+            <KpiCard icon="payments" label="This Month" value={fmt(monthBarberCut)} sub="Your monthly take home" accent="var(--badge-success-fg)" />
           </div>
 
           {/* Recent transactions */}
@@ -567,7 +607,7 @@ const ProfilePage = () => {
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 700, color: "#16a34a" }}>{fmt(myCut)}</p>
+                        <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 700, color: "var(--badge-success-fg)" }}>{fmt(myCut)}</p>
                         <p style={{ fontFamily: "Geist", fontSize: 10, color: C.onSurfaceVariant }}>of {fmt(gross)} gross</p>
                       </div>
                     </div>
@@ -576,8 +616,6 @@ const ProfilePage = () => {
               </div>
             )}
           </div>
-          {/* Calendar */}
-          <InlineCalendar txns={txns} />
         </>
       )}
 

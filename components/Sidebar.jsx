@@ -1,13 +1,21 @@
 import { C, getNavItems } from "../tokens/design";
 import { Icon } from "./ui";
+import { useSettingsContext } from "../context/useSettingsContext";
 
 const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerOpen, setDrawerOpen, onLogout, role }) => {
   const W = collapsed ? 80 : 280;
   const visibleItems = getNavItems(role);
 
+  // Falls back to the shop's original defaults until Settings loads / if the
+  // admin hasn't changed them.
+  const { settings } = useSettingsContext();
+  const shopName    = settings?.shop?.name    || "Jake Barber Studio";
+  const shopTagline = settings?.shop?.tagline || "Premium Grooming";
+
   const mobileStyle = {
     position: "fixed",
     left: 0, top: 0, bottom: 0,
+
     width: 280,
     borderRadius: 0,
     transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
@@ -49,10 +57,10 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerO
           <>
             <div>
               <div style={{ fontFamily: "Geist", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", color: C.primary }}>
-                THE PARLOUR
+                {shopName}
               </div>
               <div style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: C.onSurfaceVariant, opacity: 0.5, marginTop: 3 }}>
-                Premium Grooming
+                {shopTagline}
               </div>
             </div>
             {isMobile && (
@@ -63,7 +71,7 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, isMobile, drawerO
           </>
         ) : (
           <div style={{ width: 36, height: 36, background: C.primary, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-            <Icon name="content_cut" size={18} style={{ color: "#fff" }} />
+            <Icon name="content_cut" size={18} style={{ color: C.onPrimary }} />
           </div>
         )}
       </div>

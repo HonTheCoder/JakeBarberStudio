@@ -20,7 +20,23 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
+
+/**
+ * 2FA is an admin-only feature in this app (Settings, where enrollment lives,
+ * is only reachable by admins). This re-checks the user's role directly
+ * against Firestore rather than trusting the UI/route to keep barbers out,
+ * so enrollment can never be triggered for a non-admin account even if the
+ * button is ever exposed elsewhere later.
+ */
+const assertIsAdmin = async (user) => {
+  const snap = await getDoc(doc(db, "users", user.uid));
+  const role = snap.exists() ? snap.data().role : null;
+  if (role !== "admin") {
+    throw new Error("Two-factor authentication is only available for admin accounts.");
+  }
+};
 
 /* ── Check whether the current user has TOTP enrolled ─────────────────────── */
 export const useTOTPStatus = () => {
@@ -28,22 +44,37 @@ export const useTOTPStatus = () => {
   const [displayName, setDisplayName] = useState(null);
   const [loading,     setLoading]     = useState(true);
 
+  const check = () => {
+    const user = auth.currentUser;
+    if (!user) { setEnrolled(false); setLoading(false); return; }
+    const factors = multiFactor(user).enrolledFactors;
+    const totp    = factors.find(f => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
+    setEnrolled(!!totp);
+    setDisplayName(totp?.displayName ?? null);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const check = () => {
-      const user = auth.currentUser;
-      if (!user) { setEnrolled(false); setLoading(false); return; }
-      const factors = multiFactor(user).enrolledFactors;
-      const totp    = factors.find(f => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
-      setEnrolled(!!totp);
-      setDisplayName(totp?.displayName ?? null);
-      setLoading(false);
-    };
-    // Run on mount and whenever auth state changes
-    check();
+    // onAuthStateChanged fires immediately with the current user (or null)
+    // as soon as we subscribe, and again on every sign-in/sign-out, so a
+    // separate manual check() call here isn't needed - and calling setState
+    // synchronously in the effect body (outside the subscription callback)
+    // is what react-hooks/set-state-in-effect was flagging.
     return auth.onAuthStateChanged(check);
   }, []);
 
-  return { enrolled, displayName, loading };
+  // Enrolling or unenrolling a factor does NOT fire onAuthStateChanged (that
+  // only fires on sign-in/sign-out), so the enrolled flag would otherwise
+  // stay stale until a full page reload. Callers should invoke this right
+  // after the enrollment or removal modal closes to pick up the change
+  // immediately.
+  const refresh = async () => {
+    setLoading(true);
+    try { await auth.currentUser?.reload(); } catch { /* ignore */ }
+    check();
+  };
+
+  return { enrolled, displayName, loading, refresh };
 };
 
 /**
@@ -57,6 +88,7 @@ export const useTOTPStatus = () => {
 export const startTOTPEnrollment = async (password) => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in.");
+  await assertIsAdmin(user);
 
   // Re-authenticate (Firebase requires this before MFA enrollment)
   const credential = EmailAuthProvider.credential(user.email, password);
@@ -68,7 +100,7 @@ export const startTOTPEnrollment = async (password) => {
   const secret   = await TotpMultiFactorGenerator.generateSecret(session);
 
   // Build a standard otpauth:// URI for QR code display
-  const appName  = "The Parlour";
+  const appName  = "Jake Barber Studio";
   const qrUri    = secret.generateQrCodeUrl(user.email, appName);
 
   return { secret, qrUri };

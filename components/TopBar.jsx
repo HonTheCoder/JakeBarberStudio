@@ -13,7 +13,7 @@ const useOutsideClick = (ref, isOpen, onClose) => {
   }, [isOpen, onClose]);
 };
 
-const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout, notifications = [] }) => {
+const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout, onNavigate, notifications = [] }) => {
   const [visible, setVisible] = useState(true);
   const [displayed, setDisplayed] = useState({ title, subtitle });
 
@@ -51,9 +51,11 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
   useOutsideClick(userRef, userOpen, () => setUserOpen(false));
 
   const menuItems = [
-    { icon: "person",        label: "Profile",       action: null,     divider: false },
-    { icon: "settings",      label: "Settings",      action: null,     divider: false },
-    { icon: "logout",        label: "Log out",       action: onLogout, divider: true  },
+    { icon: "person",   label: "Profile",  action: () => onNavigate?.("profile"),  divider: false },
+    ...(role === "admin"
+      ? [{ icon: "settings", label: "Settings", action: () => onNavigate?.("settings"), divider: false }]
+      : []),
+    { icon: "logout",   label: "Log out",  action: onLogout, divider: true },
   ];
 
   return (
@@ -107,7 +109,7 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px 12px" }}>
                   <span style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 700, color: C.primary }}>
                     Notifications{" "}
-                    {unreadCount > 0 && <span style={{ marginLeft: 6, background: C.error, color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999 }}>{unreadCount}</span>}
+                    {unreadCount > 0 && <span style={{ marginLeft: 6, background: C.error, color: C.onError, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999 }}>{unreadCount}</span>}
                   </span>
                   {unreadCount > 0 && (
                     <button onClick={markAllRead} style={{ fontSize: 11, fontFamily: "Geist", fontWeight: 600, color: C.secondary, background: "none" }}>Mark all read</button>
@@ -185,7 +187,7 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
                       {item.divider && <div style={{ height: 1, background: `${C.outlineVariant}30`, margin: "6px 0" }} />}
                       <button
                         onClick={() => { setUserOpen(false); item.action?.(); }}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "none", textAlign: "left", cursor: item.action || item.label !== "Profile" ? "pointer" : "default", transition: "background 0.15s" }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "none", textAlign: "left", cursor: item.action ? "pointer" : "default", transition: "background 0.15s" }}
                         onMouseOver={e => (e.currentTarget.style.background = item.label === "Log out" ? `${C.error}10` : C.surfaceLow)}
                         onMouseOut={e => (e.currentTarget.style.background = "transparent")}
                       >

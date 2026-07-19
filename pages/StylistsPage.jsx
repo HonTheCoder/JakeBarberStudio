@@ -11,8 +11,8 @@ const StatusBadge = ({ status }) => {
   const active = status === "Active";
   return (
     <span style={{
-      background: active ? "#dcfce7" : C.surfaceHigh,
-      color: active ? "#166534" : C.onSurfaceVariant,
+      background: active ? "var(--badge-success-bg)" : C.surfaceHigh,
+      color: active ? "var(--badge-success-fg)" : C.onSurfaceVariant,
       padding: "3px 12px", borderRadius: 999,
       fontSize: 11, fontFamily: "Geist", fontWeight: 600,
       letterSpacing: "0.08em", textTransform: "uppercase",
@@ -47,9 +47,9 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
               </span>
             </div>
             {!stylist.uid && (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5, padding: "2px 8px", borderRadius: 999, background: "#fef3c7" }}>
-                <Icon name="warning" size={11} style={{ color: "#92400e" }} />
-                <span style={{ fontFamily: "Geist", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#92400e" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5, padding: "2px 8px", borderRadius: 999, background: "var(--badge-warning-bg)" }}>
+                <Icon name="warning" size={11} style={{ color: "var(--badge-warning-fg)" }} />
+                <span style={{ fontFamily: "Geist", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--badge-warning-fg)" }}>
                   No login
                 </span>
               </div>
@@ -110,7 +110,7 @@ const StylistCard = ({ stylist, onEdit, onDelete }) => (
       <SecondaryBtn icon="edit" onClick={() => onEdit(stylist)}>Edit</SecondaryBtn>
       <button
         onClick={() => onDelete(stylist)}
-        style={{ padding: "8px 14px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}
+        style={{ padding: "8px 14px", borderRadius: 10, background: "var(--c-error-container)", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}
       >
         <Icon name="delete" size={14} style={{ color: C.error }} />
         Remove
@@ -200,7 +200,7 @@ const StylistsPage = ({ search = "" }) => {
       </div>
 
       {/* KPI strip */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 36 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(240px, 1fr))", gap: isMobile ? 12 : 20, marginBottom: isMobile ? 24 : 36 }}>
         {[
           { icon: "content_cut",  label: "Total Stylists",  value: stylists.length },
           { icon: "check_circle", label: "Active",          value: active },
@@ -224,7 +224,7 @@ const StylistsPage = ({ search = "" }) => {
           <button key={f} onClick={() => setFilter(f)} style={{
             padding: "7px 18px", borderRadius: 999,
             background: filter === f ? C.primary : "transparent",
-            color: filter === f ? "#fff" : C.onSurfaceVariant,
+            color: filter === f ? C.onPrimary : C.onSurfaceVariant,
             border: `1px solid ${filter === f ? C.primary : C.outlineVariant}`,
             fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
             transition: "all 0.15s",
@@ -253,7 +253,7 @@ const StylistsPage = ({ search = "" }) => {
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "12px 28px", borderRadius: 14,
-              background: C.primary, color: "#fff",
+              background: C.primary, color: C.onPrimary,
               fontFamily: "Geist", fontSize: 13, fontWeight: 600,
               letterSpacing: "0.04em", border: "none", cursor: "pointer",
               transition: "opacity 0.15s",
@@ -261,12 +261,12 @@ const StylistsPage = ({ search = "" }) => {
             onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
             onMouseOut={e => (e.currentTarget.style.opacity = "1")}
           >
-            <Icon name="settings" size={18} style={{ color: "#fff" }} />
+            <Icon name="settings" size={18} style={{ color: C.onPrimary }} />
             Go to Staff Accounts
           </button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: isMobile ? 16 : 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(340px, 1fr))", gap: isMobile ? 16 : 24 }}>
           {filtered.map(s => (
             <StylistCard key={s.id} stylist={s} onEdit={setEditTarget} onDelete={setDelTarget} />
           ))}

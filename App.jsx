@@ -229,6 +229,7 @@ const Shell = () => {
           isMobile={isMobile}
           onMenuClick={() => setDrawerOpen(true)}
           onLogout={logout}
+          onNavigate={setActive}
           userEmail={user.email}
           displayName={displayName}
           role={role}

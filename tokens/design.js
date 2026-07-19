@@ -21,9 +21,24 @@ export const C = {
   outline:            "var(--c-outline)",
   outlineVariant:     "var(--c-outline-variant)",
   error:              "var(--c-error)",
+  onError:            "var(--c-on-error)",
   errorContainer:     "var(--c-error-container)",
   inverseSurface:     "var(--c-inverse-surface)",
   inverseOnSurface:   "var(--c-inverse-on-surface)",
+
+  // ── Accent — used for interactive/data-viz elements (chart bars, hover
+  // states, active cursors) so those never default to flat black/white. ──
+  accent:             "var(--c-accent)",
+  accentHover:        "var(--c-accent-hover)",
+  accentSoft:         "var(--c-accent-soft)",
+  onAccent:           "var(--c-on-accent)",
+
+  // ── Chart palette — always warm/gold-toned, never pure black/white. ──
+  chart1:             "var(--c-chart-1)",
+  chart2:             "var(--c-chart-2)",
+  chart3:             "var(--c-chart-3)",
+  chart4:             "var(--c-chart-4)",
+  chart5:             "var(--c-chart-5)",
 };
 
 // All nav items — each has an optional `roles` array.

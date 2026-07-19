@@ -229,8 +229,8 @@ const BrandedQRCard = ({ client }) => {
         style={{
           display: "flex", alignItems: "center", gap: 9,
           padding: "11px 22px", borderRadius: 12,
-          background: downloaded ? "#dcfce7" : C.primary,
-          color: downloaded ? "#166534" : "#fff",
+          background: downloaded ? "var(--badge-success-bg)" : C.primary,
+          color: downloaded ? "var(--badge-success-fg)" : "#fff",
           fontFamily: "Geist", fontSize: 12, fontWeight: 600,
           letterSpacing: "0.06em", textTransform: "uppercase",
           transition: "all 0.2s",
@@ -481,7 +481,7 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab
               style={{
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "9px 16px", borderRadius: 10,
-                background: "#fef2f2", color: C.error,
+                background: "var(--c-error-container)", color: C.error,
                 fontFamily: "Geist", fontSize: 11, fontWeight: 600,
                 letterSpacing: "0.06em", textTransform: "uppercase",
               }}
@@ -521,7 +521,7 @@ const FilterChip = ({ label, active, onClick }) => (
       fontFamily: "Geist", fontSize: 11, fontWeight: 600,
       letterSpacing: "0.08em", textTransform: "uppercase",
       background: active ? C.primary : C.surfaceLow,
-      color: active ? "#fff" : C.onSurfaceVariant,
+      color: active ? C.onPrimary : C.onSurfaceVariant,
       border: `1.5px solid ${active ? C.primary : C.outlineVariant + "40"}`,
       transition: "all 0.18s",
     }}
@@ -539,13 +539,13 @@ const ActionBtn = ({ icon, label, onClick, danger = false, color }) => (
     onClick={e => { e.stopPropagation(); onClick(); }}
     style={{
       width: 32, height: 32, borderRadius: 8,
-      background: danger ? "#fef2f2" : C.surfaceLow,
+      background: danger ? "var(--c-error-container)" : C.surfaceLow,
       display: "flex", alignItems: "center", justifyContent: "center",
       transition: "all 0.15s",
       border: "none",
     }}
     onMouseOver={e => { e.currentTarget.style.background = danger ? "#fecaca" : C.surfaceHigh; }}
-    onMouseOut={e => { e.currentTarget.style.background = danger ? "#fef2f2" : C.surfaceLow; }}
+    onMouseOut={e => { e.currentTarget.style.background = danger ? "var(--c-error-container)" : C.surfaceLow; }}
   >
     <Icon name={icon} size={15} style={{ color: color ?? (danger ? C.error : C.onSurfaceVariant) }} />
   </button>
@@ -632,7 +632,7 @@ const ClientsPage = ({ search = "" }) => {
   if (loading) {
     return (
       <div style={{ animation: "fadeUp 0.4s ease" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 20, marginBottom: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 20, marginBottom: 32 }}>
           {Array(3).fill(null).map((_, i) => (
             <div key={i} className="card" style={{ padding: "22px 24px" }}>
               <Sk w={40} h={40} r={12} style={{ marginBottom: 16 }} />
@@ -692,7 +692,7 @@ const ClientsPage = ({ search = "" }) => {
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "12px 28px", borderRadius: 14,
-              background: C.primary, color: "#fff",
+              background: C.primary, color: C.onPrimary,
               fontFamily: "Geist", fontSize: 13, fontWeight: 600,
               letterSpacing: "0.04em", border: "none", cursor: "pointer",
               transition: "opacity 0.15s",
@@ -700,7 +700,7 @@ const ClientsPage = ({ search = "" }) => {
             onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
             onMouseOut={e => (e.currentTarget.style.opacity = "1")}
           >
-            <Icon name="person_add" size={18} style={{ color: "#fff" }} />
+            <Icon name="person_add" size={18} style={{ color: C.onPrimary }} />
             Add your first client
           </button>
         </div>
@@ -850,7 +850,7 @@ const ClientsPage = ({ search = "" }) => {
             style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "10px 24px", borderRadius: 12,
-              background: C.primary, color: "#fff",
+              background: C.primary, color: C.onPrimary,
               fontFamily: "Geist", fontSize: 12, fontWeight: 600,
               letterSpacing: "0.04em", border: "none", cursor: "pointer",
               transition: "opacity 0.15s",
@@ -858,7 +858,7 @@ const ClientsPage = ({ search = "" }) => {
             onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
             onMouseOut={e => (e.currentTarget.style.opacity = "1")}
           >
-            <Icon name="person_add" size={16} style={{ color: "#fff" }} />
+            <Icon name="person_add" size={16} style={{ color: C.onPrimary }} />
             Add Client
           </button>
         </div>
@@ -1086,7 +1086,7 @@ const ClientsPage = ({ search = "" }) => {
                           width: 32, height: 32, borderRadius: 8,
                           fontFamily: "Geist", fontSize: 12, fontWeight: page === p ? 700 : 500,
                           background: page === p ? C.primary : C.surfaceLowest,
-                          color: page === p ? "#fff" : C.onSurfaceVariant,
+                          color: page === p ? C.onPrimary : C.onSurfaceVariant,
                           border: `1px solid ${page === p ? C.primary : C.outlineVariant + "40"}`,
                         }}
                       >

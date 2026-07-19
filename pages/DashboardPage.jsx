@@ -6,6 +6,7 @@ import { C } from "../tokens/design";
 import { useAuth } from "../context/AuthContext";
 import { useStats } from "../hooks/useStats";
 import { AddClientModal, AddStylistModal } from "../components/modals";
+import EarningsCalendar from "../components/EarningsCalendar";
 import { Icon, Badge, SectionTitle } from "../components/ui";
 
 import { fmt, toNum } from "../utils/currency";
@@ -62,7 +63,7 @@ const QuickAction = ({ icon, label, onClick }) => (
       color: C.onSurface, cursor: "pointer",
       transition: "all 0.18s",
     }}
-    onMouseOver={e => { e.currentTarget.style.background = C.primary; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = C.primary; }}
+    onMouseOver={e => { e.currentTarget.style.background = C.primary; e.currentTarget.style.color = C.onPrimary; e.currentTarget.style.borderColor = C.primary; }}
     onMouseOut={e => { e.currentTarget.style.background = C.surfaceLowest; e.currentTarget.style.color = C.onSurface; e.currentTarget.style.borderColor = C.outlineVariant; }}
   >
     <Icon name={icon} size={18} />
@@ -74,10 +75,10 @@ const QuickAction = ({ icon, label, onClick }) => (
 const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 10, padding: "8px 14px", fontFamily: "Geist", boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
+    <div style={{ background: C.surfaceLowest, border: `1px solid ${C.outlineVariant}`, borderRadius: 10, padding: "8px 14px", fontFamily: "Geist", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
       <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 4 }}>{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ fontSize: 13, fontWeight: 500, color: C.primary }}>{fmt(p.value)}</p>
+        <p key={i} style={{ fontSize: 13, fontWeight: 600, color: C.accent }}>{fmt(p.value)}</p>
       ))}
     </div>
   );
@@ -230,13 +231,31 @@ const TodaySchedule = ({ appointments, loading }) => {
 /* ═══════════════════════════════════════════════════════════════════════════
    ADMIN DASHBOARD
 ═══════════════════════════════════════════════════════════════════════════ */
-const AdminDashboard = ({ stats, loading, clients, stylists }) => {
+const AdminDashboard = ({ stats, loading, clients, stylists, userId, userEmail }) => {
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddBarber, setShowAddBarber] = useState(false);
   const isMobile = useIsMobile();
 
   const activeBarbers = (stylists ?? []).filter(s => s.status === "Active").length;
   const recentClients = (clients ?? []).slice(0, 4);
+
+  // Admin's own submitted income (same owner-operator model as BarberDashboard)
+  // — uid match first, name fallback — so their personal calendar below shows
+  // only days *they* logged income on, not the whole shop's transactions.
+  const stylistRecord = (stylists ?? []).find(s => s.uid === userId);
+  const myBarberName = stylistRecord?.name
+    ?? (userEmail ? userEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Me");
+  const allTx = stats?.transactions ?? [];
+  const myTx = allTx.filter(t =>
+    t.barberUid
+      ? t.barberUid === userId
+      : (t.barber ?? "").toLowerCase() === myBarberName.toLowerCase()
+  );
+
+  const monthlyRevenue = stats?.monthlyRevenue ?? 0;
+  const monthlyTarget  = stats?.monthlyTarget ?? 0;
+  const targetPct = monthlyTarget > 0 ? Math.min(100, Math.round((monthlyRevenue / monthlyTarget) * 100)) : 0;
+  const targetMet = monthlyTarget > 0 && monthlyRevenue >= monthlyTarget;
 
   const cards = [
     { icon: "payments",     label: "Today Sales",    value: fmt(stats?.dailyRevenue ?? 0), loading },
@@ -247,7 +266,7 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
   return (
     <div>
       {/* ── Stat Cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 20, marginBottom: 32 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 32 }}>
         {cards.map((c, i) => <StatCard key={i} {...c} />)}
       </div>
 
@@ -256,6 +275,60 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
         <QuickAction icon="person_add"   label="Add Client" onClick={() => setShowAddClient(true)} />
         <QuickAction icon="content_cut"  label="Add Barber" onClick={() => setShowAddBarber(true)} />
       </div>
+
+      {/* ── Sales Overview (Today / Week / Month) ── */}
+      <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 12 }}>
+        Sales Overview
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, marginBottom: 24 }}>
+        <StatCard icon="today"          label="Today"      value={fmt(stats?.dailyRevenue   ?? 0)} sub="Sales collected today"    loading={loading} accent />
+        <StatCard icon="date_range"     label="This Week"  value={fmt(stats?.weeklySales     ?? 0)} sub="Current calendar week"    loading={loading} />
+        <StatCard icon="calendar_month" label="This Month" value={fmt(stats?.monthlyRevenue  ?? 0)} sub={new Date().toLocaleString("en-PH", { month: "long", year: "numeric" })} loading={loading} />
+      </div>
+
+      {/* ── Monthly Revenue Target — current vs. the target set in Settings ── */}
+      <div className="card" style={{ padding: "24px 28px", marginBottom: 36 }}>
+        {loading ? (
+          <>
+            <Sk w="40%" h={13} style={{ marginBottom: 14 }} />
+            <Sk w="100%" h={10} r={999} style={{ marginBottom: 10 }} />
+            <Sk w="55%" h={12} />
+          </>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <p style={{ fontFamily: "Geist", fontSize: 14, fontWeight: 600, color: C.primary }}>
+                  Monthly Revenue Target
+                </p>
+                <p style={{ fontFamily: "Geist", fontSize: 11.5, color: C.onSurfaceVariant, marginTop: 2 }}>
+                  {new Date().toLocaleString("en-PH", { month: "long", year: "numeric" })} progress
+                </p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 700, color: C.primary }}>
+                  {fmt(monthlyRevenue)} <span style={{ fontWeight: 400, color: C.onSurfaceVariant, fontSize: 13 }}>of {fmt(monthlyTarget)}</span>
+                </p>
+              </div>
+            </div>
+
+            <div style={{ width: "100%", height: 10, borderRadius: 999, background: C.surfaceLow, overflow: "hidden" }}>
+              <div style={{
+                width: `${targetPct}%`, height: "100%", borderRadius: 999,
+                background: targetMet ? "#1a7a3c" : C.primary,
+                transition: "width 0.4s ease",
+              }} />
+            </div>
+
+            <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, marginTop: 10 }}>
+              {targetMet
+                ? `Target reached — ${targetPct}% of goal 🎉`
+                : `${targetPct}% of target reached · ${fmt(Math.max(0, monthlyTarget - monthlyRevenue))} to go`}
+            </p>
+          </>
+        )}
+      </div>
+
 
       {/* ── Weekly Sales Chart + Recent Clients ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 24, marginBottom: 28, alignItems: "start" }}>
@@ -271,8 +344,8 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
                 <CartesianGrid strokeDasharray="3 3" stroke={`${C.outlineVariant}30`} vertical={false} />
                 <XAxis dataKey="day" tick={{ fontFamily: "Geist", fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={v => fmt(v, true)} tick={{ fontFamily: "Geist", fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} width={44} />
-                <Tooltip content={<ChartTip />} cursor={{ fill: `${C.primary}08` }} />
-                <Bar dataKey="sales" name="Sales" fill={C.primary} radius={[6, 6, 0, 0]} />
+                <Tooltip content={<ChartTip />} cursor={{ fill: "var(--c-accent-soft)", radius: [6, 6, 0, 0] }} />
+                <Bar dataKey="sales" name="Sales" fill={C.accent} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -298,11 +371,11 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
                   <p style={{ fontFamily: "Geist", fontSize: 12, color: C.onSurfaceVariant, marginBottom: 20 }}>Add your first client to get started.</p>
                   <button
                     onClick={() => setShowAddClient(true)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 10, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 10, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", transition: "opacity 0.15s" }}
                     onMouseOver={e => (e.currentTarget.style.opacity = "0.88")}
                     onMouseOut={e => (e.currentTarget.style.opacity = "1")}
                   >
-                    <Icon name="person_add" size={15} style={{ color: "#fff" }} />
+                    <Icon name="person_add" size={15} style={{ color: C.onPrimary }} />
                     Add your first client
                   </button>
                 </div>
@@ -316,6 +389,12 @@ const AdminDashboard = ({ stats, loading, clients, stylists }) => {
           }
         </div>
       </div>
+
+      {/* ── My Earnings Calendar ── */}
+      <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 12 }}>
+        My Earnings Calendar
+      </p>
+      <EarningsCalendar txns={myTx} />
 
       {/* ── Add Client Modal ── */}
       {showAddClient && (
@@ -351,10 +430,22 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
       : (t.barber ?? "").toLowerCase() === barberName.toLowerCase()
   );
   const myCompleted = myTx.filter(t => t.status === "Completed");
-  const myEarnings = myCompleted.reduce((s, t) => s + toNum(t.amount), 0);
   const myPending = myTx.filter(t => t.status !== "Completed" && t.status !== "Refunded");
 
   const recentClients = (clients ?? []).slice(0, 3);
+
+  /* ── Date-scoped earnings (today / this week / this month) ───────────────
+     Each completed transaction's real date is parsed once, then bucketed —
+     matches the same day/week/month boundaries used elsewhere in the app. */
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay()); weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const myCompletedDated = myCompleted.map(t => ({ ...t, _d: parseTxDate(t.date) ?? parseTxDate(t.createdAt) }));
+  const todayEarnings = myCompletedDated.filter(t => t._d && t._d.toDateString() === now.toDateString()).reduce((s, t) => s + toNum(t.amount), 0);
+  const weekEarnings  = myCompletedDated.filter(t => t._d && t._d >= weekStart).reduce((s, t) => s + toNum(t.amount), 0);
+  const monthEarnings = myCompletedDated.filter(t => t._d && t._d >= monthStart).reduce((s, t) => s + toNum(t.amount), 0);
+  const clientsServedToday = myCompletedDated.filter(t => t._d && t._d.toDateString() === now.toDateString()).length;
 
   /* ── Build today's schedule from real appointment time fields ────────────
      Each transaction's `date` field holds the actual appointment datetime,
@@ -362,7 +453,6 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
      We parse it, filter to today, sort ascending by time, then display the
      real formatted time — no hardcoded TIMES array, no positional index.
   ─────────────────────────────────────────────────────────────────────── */
-  const now = new Date();
 
   const todayAppointments = myTx
     .map(t => {
@@ -389,10 +479,20 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
       </div>
 
       {/* ── Stat Cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 20, marginBottom: 32 }}>
-        <StatCard icon="payments"    label="Today Earnings"  value={fmt(myEarnings)}       loading={loading} accent />
-        <StatCard icon="group"       label="Clients Served"  value={myCompleted.length}     loading={loading} />
-        <StatCard icon="pending"     label="Pending"         value={myPending.length}        loading={loading} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 32 }}>
+        <StatCard icon="payments"    label="Today Earnings"  value={fmt(todayEarnings)}       loading={loading} accent />
+        <StatCard icon="group"       label="Clients Served"  value={clientsServedToday}       loading={loading} />
+        <StatCard icon="pending"     label="Pending"         value={myPending.length}         loading={loading} />
+      </div>
+
+      {/* ── Earnings Overview (Today / Week / Month) ── */}
+      <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 12 }}>
+        Earnings Overview
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
+        <StatCard icon="today"          label="Today"      value={fmt(todayEarnings)} sub="Your take home today"    loading={loading} accent />
+        <StatCard icon="date_range"     label="This Week"  value={fmt(weekEarnings)}  sub="Current calendar week"   loading={loading} />
+        <StatCard icon="calendar_month" label="This Month" value={fmt(monthEarnings)} sub={new Date().toLocaleString("en-PH", { month: "long", year: "numeric" })} loading={loading} />
       </div>
 
       {/* ── Today's Schedule + Recent Clients ── */}
@@ -436,6 +536,12 @@ const BarberDashboard = ({ stats, loading, clients, userId, userEmail, stylists 
           )}
         </div>
       </div>
+
+      {/* ── Earnings Calendar ── */}
+      <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginTop: 28, marginBottom: 12 }}>
+        Earnings Calendar
+      </p>
+      <EarningsCalendar txns={myTx} />
     </div>
   );
 };
@@ -467,6 +573,7 @@ const DashboardPage = () => {
       clients={clients}
       stylists={stylists}
       userId={user?.uid}
+      userEmail={user?.email}
     />
   );
 };

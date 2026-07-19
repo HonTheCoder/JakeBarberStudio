@@ -306,7 +306,7 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
               <button
                 onClick={startCamera}
                 style={{
-                  padding: "10px 24px", borderRadius: 12, background: C.primary, color: "#fff",
+                  padding: "10px 24px", borderRadius: 12, background: C.primary, color: C.onPrimary,
                   fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
                 }}
               >
@@ -333,7 +333,7 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
               <button
                 onClick={() => { setErrorMsg(""); startCamera(); }}
                 style={{
-                  padding: "10px 24px", borderRadius: 12, background: C.primary, color: "#fff",
+                  padding: "10px 24px", borderRadius: 12, background: C.primary, color: C.onPrimary,
                   fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
                 }}
               >
@@ -347,10 +347,10 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
               <div style={{
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "12px 16px", borderRadius: 12, marginBottom: 20,
-                background: "#dcfce7", border: "1px solid #86efac",
+                background: "var(--badge-success-bg)", border: "1px solid var(--badge-success-fg)",
               }}>
-                <Icon name="check_circle" size={20} style={{ color: "#16a34a", flexShrink: 0 }} />
-                <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: "#15803d" }}>
+                <Icon name="check_circle" size={20} style={{ color: "var(--badge-success-fg)", flexShrink: 0 }} />
+                <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: "var(--badge-success-fg)" }}>
                   Client identified — visit recorded
                 </p>
               </div>
@@ -421,7 +421,7 @@ const QRScannerModal = ({ clients = [], onFound, onClose }) => {
                   onClick={() => onFound(foundClient)}
                   style={{
                     flex: 2, padding: "11px 0", borderRadius: 12,
-                    background: C.primary, color: "#fff",
+                    background: C.primary, color: C.onPrimary,
                     fontFamily: "Geist", fontSize: 12, fontWeight: 600,
                     letterSpacing: "0.06em", textTransform: "uppercase",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,

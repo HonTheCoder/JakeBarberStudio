@@ -190,8 +190,8 @@ export const NewClientQRModal = ({ client, onClose }) => {
     >
       <div className="card" style={{ padding: 36, maxWidth: 420, width: "100%", textAlign: "center" }}>
         {/* Success header */}
-        <div style={{ width: 52, height: 52, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-          <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+        <div style={{ width: 52, height: 52, background: "var(--badge-success-bg)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+          <Icon name="check_circle" size={28} style={{ color: "var(--badge-success-fg)" }} />
         </div>
         <h2 style={{ fontFamily: "Geist", fontSize: 20, fontWeight: 700, color: C.primary, marginBottom: 4 }}>
           Client Added!
@@ -232,14 +232,14 @@ export const NewClientQRModal = ({ client, onClose }) => {
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "11px 22px", borderRadius: 12,
-              background: downloaded ? "#dcfce7" : C.primary,
-              color: downloaded ? "#166534" : "#fff",
+              background: downloaded ? "var(--badge-success-bg)" : C.primary,
+              color: downloaded ? "var(--badge-success-fg)" : C.onPrimary,
               fontFamily: "Geist", fontSize: 12, fontWeight: 600,
               letterSpacing: "0.06em", textTransform: "uppercase",
               transition: "all 0.2s", boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
             }}
           >
-            <Icon name={downloaded ? "check_circle" : "download"} size={16} style={{ color: downloaded ? "#166534" : "#fff" }} />
+            <Icon name={downloaded ? "check_circle" : "download"} size={16} style={{ color: downloaded ? "var(--badge-success-fg)" : C.onPrimary }} />
             {downloaded ? "Downloaded!" : "Download QR Card"}
           </button>
           <button
@@ -556,13 +556,13 @@ const DeleteConfirmModal = ({ title, description, confirmLabel = "Yes, Delete", 
   return (
     <Overlay onClose={onClose}>
       <div className="card" style={{ padding: 32, maxWidth: 440, width: "100%" }}>
-        <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+        <div style={{ width: 48, height: 48, background: "var(--c-error-container)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Icon name="delete_forever" size={24} style={{ color: C.error }} />
         </div>
         <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>{title}</h3>
         <p style={{ fontSize: 14, color: C.onSurfaceVariant, marginBottom: 20, lineHeight: 1.6 }}>{description}</p>
 
-        <div style={{ background: "#fef2f2", border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+        <div style={{ background: "var(--c-error-container)", border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
           <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.error, marginBottom: 8 }}>
             TYPE <span style={{ fontFamily: "monospace", background: `${C.error}15`, padding: "1px 6px", borderRadius: 4 }}>DELETE</span> TO CONFIRM
           </p>
@@ -571,7 +571,7 @@ const DeleteConfirmModal = ({ title, description, confirmLabel = "Yes, Delete", 
             value={typed}
             onChange={e => setTyped(e.target.value)}
             placeholder="DELETE"
-            style={{ ...inputStyle, background: "#fff", border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, color: C.onSurface, fontFamily: "monospace", letterSpacing: "0.06em" }}
+            style={{ ...inputStyle, background: C.surfaceLowest, border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, color: C.onSurface, fontFamily: "monospace", letterSpacing: "0.06em" }}
           />
         </div>
 
@@ -585,7 +585,7 @@ const DeleteConfirmModal = ({ title, description, confirmLabel = "Yes, Delete", 
             style={{
               padding: "10px 20px", borderRadius: 12,
               background: !confirmed ? C.outlineVariant : deleting ? C.outlineVariant : C.error,
-              color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600,
+              color: (!confirmed || deleting) ? C.onSurfaceVariant : C.onError, fontFamily: "Geist", fontSize: 12, fontWeight: 600,
               letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8,
               opacity: (!confirmed || deleting) ? 0.55 : 1,
               cursor: (!confirmed || deleting) ? "not-allowed" : "pointer",
@@ -863,7 +863,7 @@ export const RestockModal = ({ product, onClose }) => {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            style={{ padding: "10px 20px", borderRadius: 12, background: submitting ? C.outlineVariant : C.secondary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: submitting ? 0.7 : 1 }}
+            style={{ padding: "10px 20px", borderRadius: 12, background: submitting ? C.outlineVariant : C.secondary, color: submitting ? C.onSurfaceVariant : C.onSecondary, fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: submitting ? 0.7 : 1 }}
           >
             {submitting && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
             {submitting ? "Saving…" : "Confirm Restock"}
@@ -970,7 +970,12 @@ export const NewSaleModal = ({ onClose }) => {
         clientId = newClientRef?.id ?? null;
       }
 
-      await addTransaction({ ...form, client: clientName, clientId, amount, grossAmount, barberCut, adminCut, txnId, date });
+      // Stamp the barber's uid (when their account is linked) so dashboards
+      // can match "my transactions" reliably instead of falling back to a
+      // fragile name-string comparison.
+      const barberUid = barberRecord?.uid ?? null;
+
+      await addTransaction({ ...form, client: clientName, clientId, amount, grossAmount, barberCut, adminCut, txnId, date, barberUid });
       success(`Sale recorded — ₱${grossAmount.toFixed(2)} for ${clientName}${matchedClient ? "" : " (new client added)"}`);
       onClose();
     } catch (e) {
@@ -1115,7 +1120,7 @@ export const AddStylistModal = ({ onClose }) => {
                 <button key={sp} type="button" onClick={() => toggleSpecialty(sp)} style={{
                   padding: "5px 12px", borderRadius: 8,
                   background: selected ? C.primary : C.surfaceLow,
-                  color: selected ? "#fff" : C.onSurfaceVariant,
+                  color: selected ? C.onPrimary : C.onSurfaceVariant,
                   border: `1px solid ${selected ? C.primary : C.outlineVariant}40`,
                   fontFamily: "Geist", fontSize: 11, fontWeight: 500,
                   transition: "all 0.15s",
@@ -1224,7 +1229,11 @@ export const EditStylistModal = ({ stylist, onClose }) => {
     try {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       const splitPercent = form.splitPercent === "" ? null : Math.min(100, Math.max(0, Number(form.splitPercent)));
-      await updateStylist(stylist.id, { ...form, splitPercent, initials });
+      // Once a login exists, email is locked to self-service (Profile → Account
+      // Security) — don't let this form's (disabled) email value overwrite it.
+      const payload = { ...form, splitPercent, initials };
+      if (hasLogin) delete payload.email;
+      await updateStylist(stylist.id, payload);
 
       if (hasLogin) {
         await setDoc(doc(db, "users", stylist.uid), { role: appRole }, { merge: true });
@@ -1247,14 +1256,14 @@ export const EditStylistModal = ({ stylist, onClose }) => {
 
         {/* ── No login account warning ── */}
         {!hasLogin && !loginDone && (
-          <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+          <div style={{ background: "var(--badge-warning-bg)", border: `1px solid ${"var(--badge-warning-fg)"}30`, borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <Icon name="warning" size={18} style={{ color: "#92400e", flexShrink: 0, marginTop: 1 }} />
+              <Icon name="warning" size={18} style={{ color: "var(--badge-warning-fg)", flexShrink: 0, marginTop: 1 }} />
               <div style={{ flex: 1 }}>
-                <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "#92400e" }}>
+                <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "var(--badge-warning-fg)" }}>
                   No login account
                 </p>
-                <p style={{ fontFamily: "Geist", fontSize: 11, color: "#92400e", marginTop: 2, lineHeight: 1.5 }}>
+                <p style={{ fontFamily: "Geist", fontSize: 11, color: "var(--badge-warning-fg)", marginTop: 2, lineHeight: 1.5 }}>
                   This stylist can't sign in or appear in Settings → Staff Accounts. Create a login below to enable access.
                 </p>
                 {!showCreateLogin && (
@@ -1263,12 +1272,12 @@ export const EditStylistModal = ({ stylist, onClose }) => {
                     onClick={() => setShowCreateLogin(true)}
                     style={{
                       marginTop: 10, padding: "7px 14px", borderRadius: 8,
-                      background: "#92400e", color: "#fff",
+                      background: "var(--badge-warning-fg)", color: "var(--badge-warning-bg)",
                       fontFamily: "Geist", fontSize: 11, fontWeight: 600,
                       display: "inline-flex", alignItems: "center", gap: 6,
                     }}
                   >
-                    <Icon name="person_add" size={13} style={{ color: "#fff" }} />
+                    <Icon name="person_add" size={13} style={{ color: "var(--badge-warning-bg)" }} />
                     Create Login
                   </button>
                 )}
@@ -1276,21 +1285,21 @@ export const EditStylistModal = ({ stylist, onClose }) => {
             </div>
 
             {showCreateLogin && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a" }}>
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.outlineVariant}` }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                   <input
                     type="password" placeholder="Password (min. 6 chars)"
-                    style={{ ...inputStyle, background: "#fff" }}
+                    style={{ ...inputStyle, background: C.surfaceLowest }}
                     value={loginForm.password} onChange={setLogin("password")}
                   />
                   <input
                     type="password" placeholder="Confirm password"
-                    style={{ ...inputStyle, background: "#fff" }}
+                    style={{ ...inputStyle, background: C.surfaceLowest }}
                     value={loginForm.confirmPassword} onChange={setLogin("confirmPassword")}
                   />
                 </div>
                 <select
-                  style={{ ...selectStyle, background: "#fff", marginBottom: 10 }}
+                  style={{ ...selectStyle, background: C.surfaceLowest, marginBottom: 10 }}
                   value={loginForm.appRole} onChange={setLogin("appRole")}
                 >
                   <option value="barber">Barber access — clients, stylists, appointments</option>
@@ -1301,7 +1310,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
                   <button
                     type="button"
                     onClick={() => setShowCreateLogin(false)}
-                    style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", color: "#92400e", fontFamily: "Geist", fontSize: 11, fontWeight: 600, border: "1px solid #fde68a" }}
+                    style={{ padding: "8px 14px", borderRadius: 8, background: C.surfaceLowest, color: "var(--badge-warning-fg)", fontFamily: "Geist", fontSize: 11, fontWeight: 600, border: `1px solid ${C.outlineVariant}` }}
                   >
                     Cancel
                   </button>
@@ -1309,7 +1318,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
                     type="button"
                     onClick={handleCreateLogin}
                     disabled={loginBusy}
-                    style={{ padding: "8px 14px", borderRadius: 8, background: "#92400e", color: "#fff", fontFamily: "Geist", fontSize: 11, fontWeight: 600, opacity: loginBusy ? 0.6 : 1 }}
+                    style={{ padding: "8px 14px", borderRadius: 8, background: "var(--badge-warning-fg)", color: "var(--badge-warning-bg)", fontFamily: "Geist", fontSize: 11, fontWeight: 600, opacity: loginBusy ? 0.6 : 1 }}
                   >
                     {loginBusy ? "Creating…" : "Confirm & Create"}
                   </button>
@@ -1320,9 +1329,9 @@ export const EditStylistModal = ({ stylist, onClose }) => {
         )}
 
         {loginDone && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#dcfce7", border: "1px solid #86efac", borderRadius: 12, padding: "10px 14px", marginBottom: 20 }}>
-            <Icon name="check_circle" size={16} style={{ color: "#16a34a", flexShrink: 0 }} />
-            <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "#15803d" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--badge-success-bg)", border: `1px solid ${C.secondary}30`, borderRadius: 12, padding: "10px 14px", marginBottom: 20 }}>
+            <Icon name="check_circle" size={16} style={{ color: "var(--badge-success-fg)", flexShrink: 0 }} />
+            <span style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: "var(--badge-success-fg)" }}>
               Login created — this stylist can now sign in and appears in Settings → Staff Accounts
             </span>
           </div>
@@ -1353,8 +1362,17 @@ export const EditStylistModal = ({ stylist, onClose }) => {
             </select>
           </Field>
         </div>
-        <Field label="Email">
-          <input style={inputStyle} type="email" value={form.email} onChange={set("email")} />
+        <Field label={hasLogin ? "Email (login username)" : "Email"}>
+          {hasLogin ? (
+            <>
+              <input style={{ ...inputStyle, background: C.surfaceHigh, color: C.onSurfaceVariant, cursor: "not-allowed" }} type="email" value={form.email} disabled readOnly />
+              <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 6, lineHeight: 1.5 }}>
+                This is also this stylist's login username. Only they can change it, from their Profile → Account Security (requires their password). Changing it here would not update their actual login.
+              </p>
+            </>
+          ) : (
+            <input style={inputStyle} type="email" value={form.email} onChange={set("email")} />
+          )}
         </Field>
         <Field label="Phone">
           <input style={inputStyle} value={form.phone} onChange={set("phone")} />
@@ -1377,7 +1395,7 @@ export const EditStylistModal = ({ stylist, onClose }) => {
                 <button key={sp} type="button" onClick={() => toggleSpecialty(sp)} style={{
                   padding: "5px 12px", borderRadius: 8,
                   background: selected ? C.primary : C.surfaceLow,
-                  color: selected ? "#fff" : C.onSurfaceVariant,
+                  color: selected ? C.onPrimary : C.onSurfaceVariant,
                   border: `1px solid ${selected ? C.primary : C.outlineVariant}40`,
                   fontFamily: "Geist", fontSize: 11, fontWeight: 500,
                   transition: "all 0.15s",
@@ -1478,8 +1496,8 @@ const BarberSplitRow = ({ barber, onSave }) => {
         disabled={saving || !dirty}
         style={{
           padding: "7px 14px", borderRadius: 8,
-          background: saved ? "#dcfce7" : (!dirty ? C.outlineVariant : C.primary),
-          color: saved ? "#166534" : "#fff",
+          background: saved ? "var(--badge-success-bg)" : (!dirty ? C.outlineVariant : C.primary),
+          color: saved ? "var(--badge-success-fg)" : C.onPrimary,
           fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.04em",
           opacity: (!dirty || saving) && !saved ? 0.6 : 1,
           display: "flex", alignItems: "center", gap: 6,

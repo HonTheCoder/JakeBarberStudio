@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { AuthContext } from "./AuthContext";
 
@@ -24,6 +24,16 @@ export const AuthProvider = ({ children }) => {
           if (snap.exists()) {
             fetchedRole = snap.data().role ?? "barber";
             fetchedName = snap.data().name ?? null;
+
+            // Auth email changes (via verifyBeforeUpdateEmail) complete
+            // asynchronously, after the user clicks a link in their inbox —
+            // possibly on another device/tab. Catch up Firestore here so the
+            // Staff Accounts / Stylists lists never show a stale email.
+            if (snap.data().email !== u.email) {
+              await updateDoc(userRef, { email: u.email });
+              const stylistSnap = await getDocs(query(collection(db, "stylists"), where("uid", "==", u.uid)));
+              await Promise.all(stylistSnap.docs.map(d => updateDoc(d.ref, { email: u.email })));
+            }
           } else {
             // First login — create the users/{uid} doc so Firestore rules
             // can resolve getUserData().role. Without this doc, every rule

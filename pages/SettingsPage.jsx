@@ -21,7 +21,7 @@ import { db } from "../firebase";
 
 /* ── Shared primitives ───────────────────────────────────────────────────── */
 const Section = ({ title, subtitle, children }) => (
-  <div style={{ marginBottom: 40 }}>
+  <div style={{ marginBottom: 40, breakInside: "avoid", WebkitColumnBreakInside: "avoid" }}>
     <div style={{ marginBottom: 20 }}>
       <h3 style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary }}>{title}</h3>
       {subtitle && <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginTop: 4 }}>{subtitle}</p>}
@@ -61,7 +61,7 @@ const FieldInput = ({ value, onChange, placeholder, type = "text" }) => (
       border: `1px solid ${C.outlineVariant}40`,
       borderRadius: 10,
       fontFamily: "Inter", fontSize: 13, color: C.onSurface,
-      width: 220, maxWidth: "100%",
+      width: 260, maxWidth: "100%",
     }}
   />
 );
@@ -113,7 +113,7 @@ const ConfirmDialog = ({ title, message, confirmLabel = "Confirm", onConfirm, on
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflowY: "auto" }}
     >
       <div className="card" style={{ padding: 32, maxWidth: 420, width: "100%", margin: "auto" }}>
-        <div style={{ width: 48, height: 48, background: danger ? "#fef2f2" : C.surfaceLow, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+        <div style={{ width: 48, height: 48, background: danger ? "var(--c-error-container)" : C.surfaceLow, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
           <Icon name={danger ? "warning" : "info"} size={24} style={{ color: danger ? C.error : C.secondary }} />
         </div>
         <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>{title}</h3>
@@ -124,7 +124,7 @@ const ConfirmDialog = ({ title, message, confirmLabel = "Confirm", onConfirm, on
           <button
             onClick={handle}
             disabled={busy}
-            style={{ padding: "10px 20px", borderRadius: 12, background: busy ? C.outlineVariant : (danger ? C.error : C.primary), color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}
+            style={{ padding: "10px 20px", borderRadius: 12, background: busy ? C.outlineVariant : (danger ? C.error : C.primary), color: busy ? C.onSurfaceVariant : (danger ? C.onError : C.onPrimary), fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}
           >
             {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
             {busy ? "Working…" : confirmLabel}
@@ -187,8 +187,11 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
           <input style={staffInputStyle} value={form.name} onChange={set("name")} />
         </div>
         <div style={{ marginBottom: 18 }}>
-          <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Email</label>
-          <input style={staffInputStyle} type="email" value={form.email} onChange={set("email")} />
+          <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Email (login username)</label>
+          <input style={{ ...staffInputStyle, background: C.surfaceHigh, color: C.onSurfaceVariant, cursor: "not-allowed" }} type="email" value={form.email} disabled readOnly />
+          <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 6, lineHeight: 1.5 }}>
+            This is also this person's login username. It can only be changed by that person themselves, from their Profile → Account Security (requires re-entering their password). Editing it here would not update their actual login or where "Forgot password" sends the reset link.
+          </p>
         </div>
         <div style={{ marginBottom: 18 }}>
           <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 6 }}>Phone Number</label>
@@ -219,7 +222,7 @@ const StaffEditModal = ({ member, onClose, onSave }) => {
           </p>
         </div>
         {err && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--c-error-container)", borderRadius: 10, marginBottom: 8 }}>
             <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
             <span style={{ fontSize: 13, color: C.error }}>{err}</span>
           </div>
@@ -347,8 +350,8 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
             const roleLabel  = isAdmin ? "Admin" : form.jobTitle || "Barber";
             return (
               <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
-                <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                  <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+                <div style={{ width: 56, height: 56, background: "var(--badge-success-bg)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <Icon name="check_circle" size={28} style={{ color: "var(--badge-success-fg)" }} />
                 </div>
                 <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 6 }}>Account created!</p>
                 <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 8 }}>
@@ -361,7 +364,7 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
                   </span>
                 </div>
                 <br />
-                <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+                <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
                   Done
                 </button>
               </div>
@@ -404,7 +407,7 @@ const CreateAccountModal = ({ onClose, onCreated }) => {
             </div>
 
             {err && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--c-error-container)", borderRadius: 10, marginBottom: 16 }}>
                 <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: C.error }}>{err}</span>
               </div>
@@ -487,7 +490,7 @@ const ClientCleanupModal = ({ onClose }) => {
       <div className="card" style={{ padding: 32, maxWidth: 520, width: "100%", margin: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, background: "#fef2f2", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 40, height: 40, background: "var(--c-error-container)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Icon name="group_remove" size={20} style={{ color: C.error }} />
             </div>
             <div>
@@ -504,14 +507,14 @@ const ClientCleanupModal = ({ onClose }) => {
 
         {done != null ? (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+            <div style={{ width: 56, height: 56, background: "var(--badge-success-bg)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="check_circle" size={28} style={{ color: "var(--badge-success-fg)" }} />
             </div>
             <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 6 }}>
               {done} client{done !== 1 ? "s" : ""} deleted
             </p>
             <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24 }}>The records have been permanently removed.</p>
-            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
               Done
             </button>
           </div>
@@ -538,13 +541,13 @@ const ClientCleanupModal = ({ onClose }) => {
               <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 10 }}>Filter by Visit Count</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {VISIT_PRESETS.map((p, i) => (
-                  <button key={p.label} onClick={() => setVisitPreset(i)} style={{ padding: "7px 16px", borderRadius: 999, background: visitPreset === i ? C.primary : C.surfaceLow, color: visitPreset === i ? "#fff" : C.onSurfaceVariant, border: `1.5px solid ${visitPreset === i ? C.primary : C.outlineVariant + "50"}`, fontFamily: "Geist", fontSize: 12, fontWeight: 500, transition: "all 0.15s" }}>
+                  <button key={p.label} onClick={() => setVisitPreset(i)} style={{ padding: "7px 16px", borderRadius: 999, background: visitPreset === i ? C.primary : C.surfaceLow, color: visitPreset === i ? C.onPrimary : C.onSurfaceVariant, border: `1.5px solid ${visitPreset === i ? C.primary : C.outlineVariant + "50"}`, fontFamily: "Geist", fontSize: 12, fontWeight: 500, transition: "all 0.15s" }}>
                     {p.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div style={{ background: matched.length ? "#fef2f2" : C.surfaceLow, border: `1px solid ${matched.length ? C.error + "30" : C.outlineVariant + "30"}`, borderRadius: 14, padding: "14px 18px", marginBottom: 22, display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ background: matched.length ? "var(--c-error-container)" : C.surfaceLow, border: `1px solid ${matched.length ? C.error + "30" : C.outlineVariant + "30"}`, borderRadius: 14, padding: "14px 18px", marginBottom: 22, display: "flex", alignItems: "center", gap: 14 }}>
               <Icon name={matched.length ? "person_remove" : "person_search"} size={22} style={{ color: matched.length ? C.error : C.onSurfaceVariant, flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <p style={{ fontFamily: "Geist", fontSize: 14, fontWeight: 600, color: matched.length ? C.error : C.onSurfaceVariant }}>
@@ -580,7 +583,7 @@ const ClientCleanupModal = ({ onClose }) => {
             {err && <p style={{ color: C.error, fontSize: 13, marginBottom: 12 }}>{err}</p>}
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <SecondaryBtn onClick={onClose} disabled={busy}>Cancel</SecondaryBtn>
-              <button onClick={handleDelete} disabled={busy || !matched.length} style={{ padding: "10px 20px", borderRadius: 12, background: (!matched.length || busy) ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: (!matched.length || busy) ? 0.6 : 1, transition: "all 0.15s" }}>
+              <button onClick={handleDelete} disabled={busy || !matched.length} style={{ padding: "10px 20px", borderRadius: 12, background: (!matched.length || busy) ? C.outlineVariant : C.error, color: (!matched.length || busy) ? C.onSurfaceVariant : C.onError, fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: (!matched.length || busy) ? 0.6 : 1, transition: "all 0.15s" }}>
                 {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
                 {busy ? "Deleting…" : `Delete ${matched.length} Client${matched.length !== 1 ? "s" : ""}`}
               </button>
@@ -635,7 +638,7 @@ const DataWipeModal = ({ onClose }) => {
       <div className="card" style={{ padding: 32, maxWidth: 520, width: "100%", margin: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, background: "#fef2f2", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 40, height: 40, background: "var(--c-error-container)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Icon name="delete_forever" size={20} style={{ color: C.error }} />
             </div>
             <div>
@@ -652,8 +655,8 @@ const DataWipeModal = ({ onClose }) => {
 
         {done ? (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Icon name="check_circle" size={28} style={{ color: "#166534" }} />
+            <div style={{ width: 56, height: 56, background: "var(--badge-success-bg)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="check_circle" size={28} style={{ color: "var(--badge-success-fg)" }} />
             </div>
             <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 10 }}>Data wiped successfully</p>
             <div style={{ textAlign: "left", background: C.surfaceLow, borderRadius: 12, padding: "14px 18px", marginBottom: 24 }}>
@@ -664,7 +667,7 @@ const DataWipeModal = ({ onClose }) => {
                 </div>
               ))}
             </div>
-            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
               Done
             </button>
           </div>
@@ -684,12 +687,12 @@ const DataWipeModal = ({ onClose }) => {
                   <button key={cat.key} onClick={() => toggle(cat.key)} style={{
                     width: "100%", display: "flex", alignItems: "center", gap: 14, textAlign: "left",
                     padding: "12px 14px", borderRadius: 12, marginBottom: 8,
-                    background: active ? "#fef2f2" : C.surfaceLow,
+                    background: active ? C.errorContainer : C.surfaceLow,
                     border: `1.5px solid ${active ? C.error + "50" : C.outlineVariant + "30"}`,
                     transition: "all 0.15s",
                   }}>
                     <div style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${active ? C.error : C.outlineVariant}`, background: active ? C.error : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {active && <Icon name="check" size={13} style={{ color: "#fff" }} />}
+                      {active && <Icon name="check" size={13} style={{ color: C.onError }} />}
                     </div>
                     <Icon name={cat.icon} size={18} style={{ color: active ? C.error : C.onSurfaceVariant, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
@@ -702,7 +705,7 @@ const DataWipeModal = ({ onClose }) => {
             </div>
 
             {selected.length > 0 && (
-              <div style={{ background: "#fef2f2", border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ background: C.errorContainer, border: `1px solid ${C.error}30`, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
                 <p style={{ fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: C.error, marginBottom: 8 }}>
                   TYPE <span style={{ fontFamily: "monospace", background: `${C.error}15`, padding: "1px 6px", borderRadius: 4 }}>DELETE</span> TO CONFIRM
                 </p>
@@ -711,7 +714,7 @@ const DataWipeModal = ({ onClose }) => {
                   value={typed}
                   onChange={e => setTyped(e.target.value)}
                   placeholder="DELETE"
-                  style={{ width: "100%", padding: "9px 14px", background: "#fff", border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, borderRadius: 10, fontFamily: "monospace", fontSize: 14, letterSpacing: "0.06em", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "9px 14px", background: C.surfaceLowest, color: C.onSurface, border: `1px solid ${confirmed ? C.error : C.outlineVariant}50`, borderRadius: 10, fontFamily: "monospace", fontSize: 14, letterSpacing: "0.06em", boxSizing: "border-box" }}
                 />
               </div>
             )}
@@ -726,7 +729,7 @@ const DataWipeModal = ({ onClose }) => {
                 style={{
                   padding: "10px 20px", borderRadius: 12,
                   background: (!selected.length || !confirmed || busy) ? C.outlineVariant : C.error,
-                  color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em",
+                  color: (!selected.length || !confirmed || busy) ? C.onSurfaceVariant : C.onError, fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em",
                   display: "flex", alignItems: "center", gap: 8,
                   opacity: (!selected.length || !confirmed || busy) ? 0.6 : 1,
                 }}
@@ -744,8 +747,8 @@ const DataWipeModal = ({ onClose }) => {
 
 /* ── Default shop settings ───────────────────────────────────────────────── */
 const DEFAULT_SHOP = {
-  name:          "The Parlour",
-  tagline:       "Premium Grooming Lounge",
+  name:          "Jake Barber Studio",
+  tagline:       "Cut Safe · Cut Right",
   email:         "admin@theparlour.com",
   phone:         "+1 (555) 800-0001",
   address:       "128 Meridian Ave, Suite 4, New York, NY 10001",
@@ -773,6 +776,7 @@ const TOTPSetupModal = ({ onClose }) => {
   useScrollLock();
   const [step,     setStep]     = useState("password"); // "password" | "qr" | "verify" | "done"
   const [password, setPassword] = useState("");
+  const [showPw,   setShowPw]   = useState(false);
   const [code,     setCode]     = useState("");
   const [secret,   setSecret]   = useState(null);
   const [qrUri,    setQrUri]    = useState("");
@@ -865,11 +869,21 @@ const TOTPSetupModal = ({ onClose }) => {
               Enter your current password to verify your identity before enabling two-factor authentication.
             </p>
             <label style={{ display: "block", fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 8 }}>Current Password</label>
-            <input style={inputStyle} type="password" placeholder="Your current password" value={password}
-              onChange={e => { setPassword(e.target.value); setErr(""); }}
-              onKeyDown={e => e.key === "Enter" && handlePassword()} autoFocus />
+            <div style={{ position: "relative" }}>
+              <input style={{ ...inputStyle, paddingRight: 44 }} type={showPw ? "text" : "password"} placeholder="Your current password" value={password}
+                onChange={e => { setPassword(e.target.value); setErr(""); }}
+                onKeyDown={e => e.key === "Enter" && handlePassword()} autoFocus />
+              <button
+                type="button"
+                onClick={() => setShowPw(s => !s)}
+                aria-label={showPw ? "Hide password" : "Show password"}
+                style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", borderRadius: 8 }}
+              >
+                <Icon name={showPw ? "visibility_off" : "visibility"} size={18} style={{ color: C.onSurfaceVariant }} />
+              </button>
+            </div>
             {err && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--c-error-container)", borderRadius: 10, marginTop: 12 }}>
                 <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: C.error }}>{err}</span>
               </div>
@@ -922,7 +936,7 @@ const TOTPSetupModal = ({ onClose }) => {
               onChange={e => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(""); }}
               onKeyDown={e => e.key === "Enter" && handleVerify()} autoFocus />
             {err && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#fef2f2", borderRadius: 10, marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "var(--c-error-container)", borderRadius: 10, marginTop: 12 }}>
                 <Icon name="error" size={16} style={{ color: C.error, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: C.error }}>{err}</span>
               </div>
@@ -939,14 +953,14 @@ const TOTPSetupModal = ({ onClose }) => {
         {/* Done */}
         {step === "done" && (
           <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-            <div style={{ width: 56, height: 56, background: "#dcfce7", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <Icon name="verified_user" size={28} style={{ color: "#166534" }} />
+            <div style={{ width: 56, height: 56, background: "var(--badge-success-bg)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <Icon name="verified_user" size={28} style={{ color: "var(--badge-success-fg)" }} />
             </div>
             <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>2FA is now active</p>
             <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24, lineHeight: 1.6 }}>
               From now on you'll need a code from your authenticator app each time you sign in.
             </p>
-            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>
               Done
             </button>
           </div>
@@ -986,11 +1000,11 @@ const TOTPRemoveModal = ({ onClose }) => {
             </div>
             <p style={{ fontFamily: "Geist", fontSize: 16, fontWeight: 600, color: C.primary, marginBottom: 8 }}>2FA removed</p>
             <p style={{ fontSize: 13, color: C.onSurfaceVariant, marginBottom: 24 }}>Two-factor authentication has been disabled for this account.</p>
-            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>Close</button>
+            <button onClick={onClose} style={{ padding: "10px 28px", borderRadius: 12, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 13, fontWeight: 600 }}>Close</button>
           </div>
         ) : (
           <>
-            <div style={{ width: 48, height: 48, background: "#fef2f2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+            <div style={{ width: 48, height: 48, background: "var(--c-error-container)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
               <Icon name="no_encryption" size={24} style={{ color: C.error }} />
             </div>
             <h3 style={{ fontFamily: "Geist", fontSize: 18, fontWeight: 600, color: C.primary, marginBottom: 8 }}>Remove Two-Factor Authentication?</h3>
@@ -1001,7 +1015,7 @@ const TOTPRemoveModal = ({ onClose }) => {
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
               <SecondaryBtn onClick={onClose} disabled={busy}>Cancel</SecondaryBtn>
               <button onClick={handleRemove} disabled={busy}
-                style={{ padding: "10px 20px", borderRadius: 12, background: busy ? C.outlineVariant : C.error, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}>
+                style={{ padding: "10px 20px", borderRadius: 12, background: busy ? C.outlineVariant : C.error, color: busy ? C.onSurfaceVariant : C.onError, fontFamily: "Geist", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8, opacity: busy ? 0.7 : 1 }}>
                 {busy && <Icon name="hourglass_empty" size={14} style={{ color: "#fff" }} />}
                 {busy ? "Removing…" : "Remove 2FA"}
               </button>
@@ -1151,7 +1165,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     }
   };
 
-  const { enrolled: totpEnrolled, loading: totpLoading } = useTOTPStatus();
+  const { enrolled: totpEnrolled, loading: totpLoading, refresh: refreshTOTPStatus } = useTOTPStatus();
 
   const [editingStaff,      setEditingStaff]      = useState(null);
   const [showCreate,        setShowCreate]        = useState(false);
@@ -1165,7 +1179,9 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
     // Persist to Firestore users/{uid}
     await updateDoc(doc(db, "users", updated.id), {
       name:     updated.name,
-      email:    updated.email,
+      // email intentionally omitted — it's the person's login username and can
+      // only be changed by them via Profile → Account Security (reauth flow),
+      // which keeps Firebase Auth and Firestore in sync.
       phone:    updated.phone ?? "",
       jobTitle: updated.role,
       status:   updated.status,
@@ -1177,7 +1193,6 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       const initials = updated.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       await Promise.all(stylistSnap.docs.map(d => updateStylist(d.id, {
         name:    updated.name,
-        email:   updated.email,
         phone:   updated.phone ?? "",
         role:    updated.role,
         status:  updated.status,
@@ -1223,7 +1238,11 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
   }
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease", maxWidth: 800 }}>
+    <div style={{ animation: "fadeUp 0.4s ease", maxWidth: 1480 }}>
+      <div style={{
+        columnCount: isMobile ? 1 : 2,
+        columnGap: 24,
+      }}>
 
       {/* ── Shop Information ─────────────────────────────────────────── */}
       <Section title="Shop Information" subtitle="Basic details about your business.">
@@ -1231,7 +1250,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
           <FieldInput value={shop.name} onChange={setShopField("name")} placeholder="Shop name" />
         </Row>
         <Row icon="sell" label="Tagline" subtitle="Short descriptor shown on login screen">
-          <FieldInput value={shop.tagline} onChange={setShopField("tagline")} placeholder="e.g. Premium Grooming Lounge" />
+          <FieldInput value={shop.tagline} onChange={setShopField("tagline")} placeholder="e.g. Cut Safe · Cut Right" />
         </Row>
         <Row icon="mail" label="Business Email" subtitle="Used for system notifications">
           <FieldInput value={shop.email} onChange={setShopField("email")} type="email" placeholder="admin@yourshop.com" />
@@ -1268,7 +1287,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
           </div>
         ) : staffLoadError ? (
           <div style={{ padding: "24px 28px" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", background: "#fef2f2", borderRadius: 12 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", background: "var(--c-error-container)", borderRadius: 12 }}>
               <Icon name="error" size={18} style={{ color: C.error, flexShrink: 0, marginTop: 1 }} />
               <div>
                 <p style={{ fontFamily: "Geist", fontSize: 12, fontWeight: 600, color: C.error }}>Couldn't load staff accounts</p>
@@ -1335,7 +1354,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       <Section title="Notifications" subtitle="Choose what alerts you receive. Alerts are sent as browser notifications.">
         {/* Permission status banner */}
         {notifPermission === "denied" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", background: "#fef2f2", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", background: "var(--c-error-container)", borderBottom: `1px solid ${C.outlineVariant}20` }}>
             <Icon name="notifications_off" size={18} style={{ color: C.error, flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <p style={{ fontFamily: "Geist", fontSize: 13, fontWeight: 600, color: C.error }}>Browser notifications blocked</p>
@@ -1352,16 +1371,16 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
             </div>
             <button
               onClick={() => requestNotifPermission().then(r => setNotifPermission(r))}
-              style={{ padding: "8px 16px", borderRadius: 10, background: C.secondary, color: "#fff", fontFamily: "Geist", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+              style={{ padding: "8px 16px", borderRadius: 10, background: C.secondary, color: C.onSecondary, fontFamily: "Geist", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
             >
               Allow
             </button>
           </div>
         )}
         {notifPermission === "granted" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", background: "#f0fdf4", borderBottom: `1px solid ${C.outlineVariant}20` }}>
-            <Icon name="check_circle" size={16} style={{ color: "#166534", flexShrink: 0 }} />
-            <p style={{ fontSize: 12, fontFamily: "Geist", color: "#166534", fontWeight: 500 }}>Browser notifications are active</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", background: "var(--badge-success-bg)", borderBottom: `1px solid ${C.outlineVariant}20` }}>
+            <Icon name="check_circle" size={16} style={{ color: "var(--badge-success-fg)", flexShrink: 0 }} />
+            <p style={{ fontSize: 12, fontFamily: "Geist", color: "var(--badge-success-fg)", fontWeight: 500 }}>Browser notifications are active</p>
           </div>
         )}
         <Row icon="warning" label="Low Stock Alerts" subtitle="Fires when any item drops to ≤ 5 units">
@@ -1393,7 +1412,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
             <Icon name="hourglass_empty" size={18} style={{ color: C.onSurfaceVariant }} />
           ) : totpEnrolled ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ background: "#dcfce7", color: "#166534", padding: "3px 12px", borderRadius: 999, fontSize: 11, fontFamily: "Geist", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Active</span>
+              <span style={{ background: "var(--badge-success-bg)", color: "var(--badge-success-fg)", padding: "3px 12px", borderRadius: 999, fontSize: 11, fontFamily: "Geist", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Active</span>
               <button
                 onClick={() => setShowTOTPRemove(true)}
                 style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.error}40`, fontFamily: "Geist", fontSize: 11, fontWeight: 600, color: C.error, letterSpacing: "0.06em" }}
@@ -1406,7 +1425,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
           ) : (
             <button
               onClick={() => setShowTOTPSetup(true)}
-              style={{ padding: "8px 16px", borderRadius: 10, background: C.primary, color: "#fff", fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
+              style={{ padding: "8px 16px", borderRadius: 10, background: C.primary, color: C.onPrimary, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
             >
               Set Up
             </button>
@@ -1440,7 +1459,7 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
         <Row icon="delete_forever" label="Data Wipe" subtitle="Delete all data at once, or pick sales, reports, inventory, or client data individually">
           <button
             onClick={() => setShowDataWipe(true)}
-            style={{ padding: "8px 16px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
+            style={{ padding: "8px 16px", borderRadius: 10, background: "var(--c-error-container)", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
           >
             Manage
           </button>
@@ -1448,18 +1467,19 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
         <Row icon="group_remove" label="Delete Clients (Filtered)" subtitle="Permanently remove client records by status or visit count" last>
           <button
             onClick={() => setShowClientCleanup(true)}
-            style={{ padding: "8px 16px", borderRadius: 10, background: "#fef2f2", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
+            style={{ padding: "8px 16px", borderRadius: 10, background: "var(--c-error-container)", color: C.error, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
           >
             Manage
           </button>
         </Row>
       </Section>
+      </div>
 
       {/* ── Save Bar ─────────────────────────────────────────────────── */}
       <div style={{ position: "sticky", bottom: isMobile ? 16 : 32, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, background: C.surface, padding: "16px 0" }}>
         {saveState === "saved" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#166534", fontSize: 13, fontFamily: "Geist", fontWeight: 500 }}>
-            <Icon name="check_circle" size={16} style={{ color: "#166534" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--badge-success-fg)", fontSize: 13, fontFamily: "Geist", fontWeight: 500 }}>
+            <Icon name="check_circle" size={16} style={{ color: "var(--badge-success-fg)" }} />
             Saved successfully
           </div>
         )}
@@ -1500,11 +1520,11 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
       )}
 
       {showTOTPSetup && (
-        <TOTPSetupModal onClose={() => setShowTOTPSetup(false)} />
+        <TOTPSetupModal onClose={() => { setShowTOTPSetup(false); refreshTOTPStatus(); }} />
       )}
 
       {showTOTPRemove && (
-        <TOTPRemoveModal onClose={() => setShowTOTPRemove(false)} />
+        <TOTPRemoveModal onClose={() => { setShowTOTPRemove(false); refreshTOTPStatus(); }} />
       )}
 
       {confirm && (

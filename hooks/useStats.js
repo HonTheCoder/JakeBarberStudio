@@ -15,7 +15,9 @@ export const useStats = () => {
 
   const loading = txLoading || stLoading || clLoading;
 
-  const monthlyTarget = parseFloat(String(settings?.monthlyTarget ?? "0").replace(/[₱$,]/g, "")) || 20000;
+  // Settings are saved as { shop: { monthlyTarget, ... }, notifs, ... } by
+  // SettingsPage — read from settings.shop.monthlyTarget, not the top level.
+  const monthlyTarget = parseFloat(String(settings?.shop?.monthlyTarget ?? "0").replace(/[₱$,]/g, "")) || 20000;
 
   const stats = useMemo(() => {
     if (!transactions.length) {
@@ -30,7 +32,7 @@ export const useStats = () => {
       const salesData        = DAYS.map(day => ({ day, sales: 0 }));
       const monthlyGrowth    = revenueData.map(d => ({ month: d.month, growth: 0 }));
       return {
-        totalRevenue: 0, dailyRevenue: 0, weeklySales: 0,
+        totalRevenue: 0, dailyRevenue: 0, weeklySales: 0, monthlyRevenue: 0,
         avgTicket: 0, refundRate: 0, refundCount: 0,
         txCount: 0, clientCount: clients.length,
         revenueData, salesData, monthlyGrowth,
@@ -114,7 +116,7 @@ export const useStats = () => {
       bySvc[svc] = (bySvc[svc] ?? 0) + 1;
     });
     const total = completed.length || 1;
-    const COLORS = ["#000000","#735c00","#c4c7c7","#eae7e7","#444748"];
+    const COLORS = ["#8a6a12","#c79a2e","#e0b94a","#8c8c8c","#52504a"];
     const serviceBreakdown = Object.entries(bySvc)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -204,6 +206,7 @@ export const useStats = () => {
       totalRevenue,
       dailyRevenue,
       weeklySales,
+      monthlyRevenue:   thisMonthRev,
       avgTicket:        Math.round(avgTicket),
       refundRate,
       refundCount:      refunded.length,

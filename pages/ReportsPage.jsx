@@ -7,6 +7,7 @@ import { C } from "../tokens/design";
 import { KpiCard, SectionTitle, SecondaryBtn, PrimaryBtn } from "../components/ui";
 import { NewSaleModal } from "../components/modals";
 import { useStats } from "../hooks/useStats";
+import { useSettingsContext } from "../context/useSettingsContext";
 import useIsMobile from "../hooks/useIsMobile";
 import { fmt, toNum, parseDate } from "../utils/currency";
 
@@ -35,7 +36,7 @@ const StatRow = ({ label, value, highlight = false, last = false }) => (
   </div>
 );
 
-const TOOLTIP_STYLE = { background: "#fff", border: `1px solid ${C.outlineVariant}`, borderRadius: 12, fontFamily: "Inter", fontSize: 13 };
+const TOOLTIP_STYLE = { background: C.surfaceLowest, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, fontFamily: "Inter", fontSize: 13, color: C.onSurface, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" };
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 const ReportsPage = () => {
@@ -43,6 +44,14 @@ const ReportsPage = () => {
   const [showModal, setShowModal] = useState(false);
   const isMobile = useIsMobile();
   const { stats, loading } = useStats();
+  const { settings } = useSettingsContext();
+  const shop = {
+    name:    settings?.shop?.name    || "Jake Barber Studio",
+    tagline: settings?.shop?.tagline || "Cut Safe · Cut Right",
+    email:   settings?.shop?.email   || "",
+    phone:   settings?.shop?.phone   || "",
+    address: settings?.shop?.address || "",
+  };
 
   const exportPDF = () => {
     const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -62,12 +71,17 @@ const ReportsPage = () => {
       `<tr><td>${t.txnId ?? t.id ?? ""}</td><td>${t.client ?? ""}</td><td>${t.service ?? ""}</td><td>${t.barber ?? ""}</td><td>${t.amount ?? ""}</td><td>${t.status ?? ""}</td></tr>`
     ).join("") || `<tr><td colspan="6" style="color:#888">No transactions</td></tr>`;
 
+    const contactParts = [shop.phone, shop.email, shop.address].filter(Boolean);
+    const contactLine = contactParts.join(" · ");
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-      <title>The Parlour — Reports</title>
+      <title>${shop.name} — Reports</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 40px; }
         h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+        .tagline { color: #888; font-size: 12px; margin-bottom: 6px; }
+        .contact { color: #666; font-size: 11px; margin-bottom: 6px; }
         .meta { color: #666; font-size: 12px; margin-bottom: 32px; }
         h2 { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #444; margin: 28px 0 12px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
@@ -79,7 +93,9 @@ const ReportsPage = () => {
         @media print { body { padding: 0; } }
       </style>
     </head><body>
-      <h1>The Parlour</h1>
+      <h1>${shop.name}</h1>
+      <p class="tagline">${shop.tagline}</p>
+      ${contactLine ? `<p class="contact">${contactLine}</p>` : ""}
       <p class="meta">Report generated on ${date}</p>
 
       <h2>Key Metrics</h2>
@@ -108,6 +124,13 @@ const ReportsPage = () => {
   };
 
   const exportCSV = () => {
+    const letterhead = [
+      [shop.name],
+      [shop.tagline],
+      [[shop.phone, shop.email, shop.address].filter(Boolean).join(" · ")],
+      [`Report generated on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`],
+      [],
+    ];
     const headers = ["ID", "Client", "Service", "Barber", "Amount", "Status"];
     const rows = transactions.map(t => [
       t.txnId ?? t.id ?? "",
@@ -117,14 +140,14 @@ const ReportsPage = () => {
       t.amount  ?? "",
       t.status  ?? "",
     ]);
-    const csv = [headers, ...rows]
+    const csv = [...letterhead, headers, ...rows]
       .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `reports_export_${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `${shop.name.replace(/[^a-z0-9]+/gi, "_")}_reports_export_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -214,7 +237,7 @@ const ReportsPage = () => {
               <ChartTitle title="Revenue Trend" sub="Actual vs target by month" />
               <div style={{ display: "flex", gap: 6 }}>
                 {["Monthly", "Quarterly"].map(p => (
-                  <button key={p} onClick={() => setRevPeriod(p)} style={{ padding: "6px 14px", borderRadius: 999, background: revPeriod === p ? C.primary : "transparent", color: revPeriod === p ? "#fff" : C.onSurfaceVariant, border: `1px solid ${revPeriod === p ? C.primary : C.outlineVariant}`, fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{p}</button>
+                  <button key={p} onClick={() => setRevPeriod(p)} style={{ padding: "6px 14px", borderRadius: 999, background: revPeriod === p ? C.primary : "transparent", color: revPeriod === p ? C.onPrimary : C.onSurfaceVariant, border: `1px solid ${revPeriod === p ? C.primary : C.outlineVariant}`, fontFamily: "Geist", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{p}</button>
                 ))}
               </div>
             </div>
@@ -222,15 +245,15 @@ const ReportsPage = () => {
               <AreaChart data={activeRevenueData}>
                 <defs>
                   <linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.primary} stopOpacity={0.08} />
-                    <stop offset="95%" stopColor={C.primary} stopOpacity={0}    />
+                    <stop offset="5%"  stopColor={C.accent} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={C.accent} stopOpacity={0}    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outlineVariant} strokeOpacity={0.3} vertical={false} />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontFamily: "Geist", fontSize: 10, fill: C.onSurfaceVariant }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => fmt(v, true)} width={40} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [fmt(v), ""]} />
-                <Area type="monotone" dataKey="revenue" stroke={C.primary}        strokeWidth={2.5} fill="url(#rGrad)" dot={{ fill: C.primary, r: 3 }} activeDot={{ r: 5 }} name="Actual" />
+                <Area type="monotone" dataKey="revenue" stroke={C.accent}         strokeWidth={2.5} fill="url(#rGrad)" dot={{ fill: C.accent, r: 3 }} activeDot={{ r: 5, fill: C.accent }} name="Actual" />
                 <Area type="monotone" dataKey="target"  stroke={C.outlineVariant} strokeWidth={1.5} fill="none" strokeDasharray="4 4" dot={false} name="Target" />
               </AreaChart>
             </ResponsiveContainer>
@@ -265,7 +288,7 @@ const ReportsPage = () => {
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontFamily: "Geist", fontSize: 10, fill: C.onSurfaceVariant }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontFamily: "Inter", fontSize: 11, fill: C.onSurfaceVariant }} tickFormatter={v => fmt(v, true)} width={40} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [fmt(v), "Sales"]} />
-                <Bar dataKey="sales" fill={C.primary} radius={[6,6,0,0]} />
+                <Bar dataKey="sales" fill={C.accent} radius={[6,6,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardInner>
@@ -353,8 +376,8 @@ const ReportsPage = () => {
                   <td style={{ padding: "14px 20px", fontFamily: "Geist", fontSize: 14, fontWeight: 600, color: C.primary }}>{t.amount}</td>
                   <td style={{ padding: "14px 20px" }}>
                     <span style={{
-                      background: t.status === "Completed" ? "#dcfce7" : "#ffdad6",
-                      color: t.status === "Completed" ? "#166534" : C.error,
+                      background: t.status === "Completed" ? "var(--badge-success-bg)" : "var(--c-error-container)",
+                      color: t.status === "Completed" ? "var(--badge-success-fg)" : C.error,
                       padding: "3px 12px", borderRadius: 999, fontSize: 11,
                       fontFamily: "Geist", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase",
                     }}>{t.status}</span>

@@ -82,11 +82,11 @@ export const Input = ({ placeholder, icon, value, onChange, style: s = {} }) => 
 export const PrimaryBtn = ({ children, onClick, icon, pill = false, style: s = {} }) => (
   <button
     onClick={onClick}
-    style={{ background: C.primary, color: "#fff", padding: pill ? "10px 24px" : "12px 24px", borderRadius: pill ? 999 : 12, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8, transition: "opacity 0.2s", ...s }}
+    style={{ background: C.primary, color: C.onPrimary, padding: pill ? "10px 24px" : "12px 24px", borderRadius: pill ? 999 : 12, fontFamily: "Geist", fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8, transition: "opacity 0.2s", ...s }}
     onMouseOver={e => (e.currentTarget.style.opacity = "0.85")}
     onMouseOut={e => (e.currentTarget.style.opacity = "1")}
   >
-    {icon && <Icon name={icon} size={18} style={{ color: "#fff" }} />}
+    {icon && <Icon name={icon} size={18} style={{ color: C.onPrimary }} />}
     {children}
   </button>
 );
