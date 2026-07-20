@@ -758,10 +758,11 @@ const DEFAULT_SHOP = {
 };
 
 const DEFAULT_NOTIFS = {
-  lowStock:      true,
-  newSale:       true,
-  dailySummary:  false,
-  weeklySummary: true,
+  lowStock:        true,
+  newSale:         true,
+  dailySummary:    false,
+  weeklySummary:   true,
+  holidayReminder: true,
 };
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
@@ -1392,8 +1393,11 @@ const SettingsPage = ({ onDarkModeChange, onCompactNavChange }) => {
         <Row icon="today" label="Daily Summary" subtitle="Fires once per day with revenue total">
           <Toggle on={notifs.dailySummary} onToggle={toggleNotif("dailySummary")} />
         </Row>
-        <Row icon="date_range" label="Weekly Report" subtitle="Fires once per week with sales summary" last>
+        <Row icon="date_range" label="Weekly Report" subtitle="Fires once per week with sales summary">
           <Toggle on={notifs.weeklySummary} onToggle={toggleNotif("weeklySummary")} />
+        </Row>
+        <Row icon="celebration" label="Holiday & Peak Day Reminders" subtitle="Fires 3 days before a PH holiday or peak season" last>
+          <Toggle on={notifs.holidayReminder} onToggle={toggleNotif("holidayReminder")} />
         </Row>
       </Section>
 

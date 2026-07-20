@@ -14,6 +14,10 @@ import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { getUpcomingHolidays } from "../utils/philippineHolidays";
+
+// Fire the holiday push once it's this many days out (and again on the day itself).
+const HOLIDAY_NOTIFY_DAYS_BEFORE = 3;
 
 /**
  * Tracks whether a user is currently signed in. This hook previously opened
@@ -58,8 +62,9 @@ const notify = (title, body, icon = "/favicon.svg") => {
 };
 
 /* ─── localStorage timestamp guards (prevent re-firing) ───────────────────── */
-const LS_DAILY  = "notif_daily_last";
-const LS_WEEKLY = "notif_weekly_last";
+const LS_DAILY   = "notif_daily_last";
+const LS_WEEKLY  = "notif_weekly_last";
+const LS_HOLIDAY = "notif_holiday_last_key"; // stores "MM-DD" of the last holiday we alerted for
 
 const msInDay  = 86_400_000;
 const msInWeek = 604_800_000;
@@ -231,6 +236,38 @@ export const useNotifications = (notifs) => {
 
     check();
     const interval = setInterval(check, 30 * 60 * 1000); // every 30 min
+    return () => clearInterval(interval);
+  }, [signedIn]); // ref handles toggle changes; re-arm once signed in
+
+  /* ── Holiday / Peak-day reminder ─────────────────────────────────────── */
+  useEffect(() => {
+    if (!("Notification" in window)) return;
+    if (!signedIn) return; // avoid firing before auth resolves
+
+    const check = () => {
+      if (Notification.permission !== "granted") return;
+      if (!notifsRef.current?.holidayReminder) return;
+
+      const next = getUpcomingHolidays(new Date(), 1)[0];
+      if (!next) return;
+      if (next.daysAway > HOLIDAY_NOTIFY_DAYS_BEFORE) return;
+
+      // One push per holiday per year — keyed by month-day so it can fire
+      // again next year without needing a reset.
+      const key = `${next.month}-${next.day}-${next.date.getFullYear()}`;
+      if (localStorage.getItem(LS_HOLIDAY) === key) return;
+      localStorage.setItem(LS_HOLIDAY, key);
+
+      const isPeak = next.type === "peak";
+      const when = next.daysAway === 0 ? "today" : next.daysAway === 1 ? "tomorrow" : `in ${next.daysAway} days`;
+      notify(
+        isPeak ? `📈 Peak day coming up` : `📅 Upcoming holiday`,
+        `${next.name} is ${when} — plan staffing${isPeak ? " for the rush" : " and shop hours"}.`
+      );
+    };
+
+    check();
+    const interval = setInterval(check, 60 * 60 * 1000); // hourly is enough — dates don't change fast
     return () => clearInterval(interval);
   }, [signedIn]); // ref handles toggle changes; re-arm once signed in
 };

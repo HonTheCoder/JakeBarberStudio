@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { C } from "../tokens/design";
-import { Icon, Input } from "./ui";
+import { Icon } from "./ui";
+import GlobalSearch from "./GlobalSearch";
 
 /* Shared hook: closes a floating panel when clicking outside its ref */
 const useOutsideClick = (ref, isOpen, onClose) => {
@@ -13,7 +14,7 @@ const useOutsideClick = (ref, isOpen, onClose) => {
   }, [isOpen, onClose]);
 };
 
-const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout, onNavigate, notifications = [] }) => {
+const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, userEmail, displayName, role, onLogout, onNavigate, notifications = [], darkMode, onDarkModeChange }) => {
   const [visible, setVisible] = useState(true);
   const [displayed, setDisplayed] = useState({ title, subtitle });
 
@@ -83,8 +84,23 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 16 }}>
 
           {!isMobile && (
-            <Input icon="search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ width: 240 }} />
+            <GlobalSearch value={search} onChange={setSearch} onNavigate={onNavigate} role={role} isMobile={isMobile} style={{ width: 260 }} />
           )}
+
+          {/* ── Dark mode toggle ── */}
+          <button
+            onClick={() => onDarkModeChange?.(!darkMode)}
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            style={{
+              padding: 10, borderRadius: 12,
+              background: C.surfaceLowest,
+              border: `1px solid ${C.outlineVariant}`,
+              display: "flex",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            <Icon name={darkMode ? "light_mode" : "dark_mode"} size={20} />
+          </button>
 
           {/* ── Notifications bell ── */}
           <div ref={notifRef} style={{ position: "relative" }}>
@@ -235,7 +251,7 @@ const TopBar = ({ title, subtitle, search, setSearch, isMobile, onMenuClick, use
 
       {/* Row 2 on mobile: search */}
       {isMobile && (
-        <Input icon="search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%" }} />
+        <GlobalSearch value={search} onChange={setSearch} onNavigate={onNavigate} role={role} isMobile={isMobile} style={{ width: "100%" }} />
       )}
 
     </header>

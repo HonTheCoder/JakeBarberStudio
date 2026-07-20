@@ -75,6 +75,24 @@ const Shell = () => {
   };
   const [isMobile,   setIsMobile]   = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Central navigation helper.
+  //   navigateTo("clients")            -> switch page, restore that page's own last search
+  //   navigateTo("clients", "Jake M.") -> switch page AND seed+persist that search query,
+  //                                        so the target page mounts already filtered
+  //                                        (used by GlobalSearch result clicks).
+  const navigateTo = (page, prefillSearch) => {
+    setActive(page);
+    let q;
+    if (prefillSearch !== undefined) {
+      q = prefillSearch;
+      try { sessionStorage.setItem(ssKey(page), q); } catch { /* noop */ }
+    } else {
+      try { q = sessionStorage.getItem(ssKey(page)) ?? ""; } catch { q = ""; }
+    }
+    setSearchRaw(q);
+    if (isMobile) setDrawerOpen(false);
+  };
   const [isOffline,  setIsOffline]  = useState(!navigator.onLine);
 
   // Controlled by SettingsPage — seed from localStorage immediately to avoid flash
@@ -194,7 +212,7 @@ const Shell = () => {
 
       <Sidebar
         active={active}
-        setActive={page => { setActive(page); try { setSearchRaw(sessionStorage.getItem(`search:${page}`) ?? ""); } catch { setSearchRaw(""); } if (isMobile) setDrawerOpen(false); }}
+        setActive={page => navigateTo(page)}
         collapsed={collapsed}
         setCollapsed={setCollapsed}
         isMobile={isMobile}
@@ -229,11 +247,13 @@ const Shell = () => {
           isMobile={isMobile}
           onMenuClick={() => setDrawerOpen(true)}
           onLogout={logout}
-          onNavigate={setActive}
+          onNavigate={navigateTo}
           userEmail={user.email}
           displayName={displayName}
           role={role}
           notifications={notifications}
+          darkMode={darkMode}
+          onDarkModeChange={handleDarkModeChange}
         />
         <Suspense fallback={
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>

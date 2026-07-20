@@ -1,0 +1,9 @@
+{
+  "version": "0.2",
+  "words": [
+    "barberCut", "dayTxns", "daysInMonth", "toDateKey", "txnsByDay",
+    "maxDayTotal", "dayTotals", "monthTotal", "selectedKey", "isCurrentMonth",
+    "jumpToToday", "prevMonth", "nextMonth", "intensityBg", "holidayDateKey",
+    "getHolidayForDate", "getUpcomingHolidays", "isPeak", "daysAway"
+  ]
+}

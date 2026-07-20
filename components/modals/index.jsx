@@ -269,7 +269,7 @@ export const AddClientModal = ({ onClose, onSaved }) => {
   const [showFullProfile, setShowFullProfile] = useState(false);
   const [form, setForm] = useState({
     // Basic
-    name: "", phone: "", status: "New",
+    name: "", phone: "", age: "", status: "New",
     // Barber prefs
     barber: "", haircutStyle: "", haircutCustom: "", beardStyle: "None", beardCustom: "", hairTexture: "",
     // Haircut details
@@ -294,9 +294,10 @@ export const AddClientModal = ({ onClose, onSaved }) => {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       const resolvedHaircut = form.haircutStyle === "Custom / Other" ? (form.haircutCustom.trim() || "Custom") : form.haircutStyle;
       const resolvedBeard   = form.beardStyle   === "Custom / Other" ? (form.beardCustom.trim()   || "Custom") : form.beardStyle;
-      const docRef = await addClient({ ...form, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, visits: 0, spent: "₱0" });
+      const age = form.age !== "" && !isNaN(Number(form.age)) ? Number(form.age) : null;
+      const docRef = await addClient({ ...form, age, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, visits: 0, spent: "₱0" });
       success(`Client "${form.name.trim()}" added successfully`);
-      onSaved({ ...form, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, id: docRef?.id ?? `tmp_${Date.now()}` });
+      onSaved({ ...form, age, haircutStyle: resolvedHaircut, beardStyle: resolvedBeard, initials, id: docRef?.id ?? `tmp_${Date.now()}` });
     } catch (e) {
       setError(e.message);
       toastError("Failed to add client — please try again");
@@ -335,9 +336,12 @@ export const AddClientModal = ({ onClose, onSaved }) => {
         <Field label="Full Name *">
           <input style={inputStyle} placeholder="e.g. Alexander Reid" value={form.name} onChange={set("name")} autoFocus />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 14 }}>
           <Field label="Phone">
             <input style={inputStyle} placeholder="+1 (555) 012-3456" value={form.phone} onChange={set("phone")} />
+          </Field>
+          <Field label="Age">
+            <input style={inputStyle} type="number" min="1" max="120" placeholder="e.g. 28" value={form.age} onChange={set("age")} />
           </Field>
           <Field label="Status">
             <select style={selectStyle} value={form.status} onChange={set("status")}>
@@ -480,6 +484,7 @@ export const EditClientModal = ({ client, onClose }) => {
     name:   client.name   ?? "",
     email:  client.email  ?? "",
     phone:  client.phone  ?? "",
+    age:    client.age    ?? "",
     barber: client.barber ?? "",
     status: client.status ?? "Regular",
     visits: client.visits ?? 0,
@@ -500,7 +505,8 @@ export const EditClientModal = ({ client, onClose }) => {
       const initials = form.name.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
       const rawSpent = String(form.spent ?? "0").replace(/[₱$,\s]/g, "") || "0";
       const spent = `₱${rawSpent}`;
-      await updateClient(client.id, { ...form, initials, spent });
+      const age = form.age !== "" && !isNaN(Number(form.age)) ? Number(form.age) : null;
+      await updateClient(client.id, { ...form, age, initials, spent });
       success(`Client "${form.name.trim()}" updated`);
       onClose();
     } catch (e) {
@@ -523,6 +529,9 @@ export const EditClientModal = ({ client, onClose }) => {
         </Field>
         <Field label="Phone">
           <input style={inputStyle} value={form.phone} onChange={set("phone")} />
+        </Field>
+        <Field label="Age">
+          <input style={inputStyle} type="number" min="1" max="120" placeholder="e.g. 28" value={form.age} onChange={set("age")} />
         </Field>
         <Field label="Preferred Barber">
           <select style={selectStyle} value={form.barber} onChange={set("barber")}>

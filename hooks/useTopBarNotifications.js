@@ -1,9 +1,13 @@
 import { useMemo, useEffect, useState } from "react";
 import { C } from "../tokens/design";
 import { useInventory, useTransactions, useClients } from "./useFirestore";
+import { getUpcomingHolidays } from "../utils/philippineHolidays";
 // currency utils not imported here — notification bodies are text-only (no amounts)
 
 const LOW_STOCK_THRESHOLD = 5;
+
+// Surface a holiday/peak-day heads-up in the bell dropdown once it's this close.
+const HOLIDAY_LOOKAHEAD_DAYS = 7;
 
 // Overdue thresholds (days since last visit)
 const OVERDUE_VIP     = 30;
@@ -285,6 +289,28 @@ export const useTopBarNotifications = ({ role, barberName } = {}) => {
       }
     }
 
+    // ── 9. UPCOMING HOLIDAY / PEAK DAY (PH) ──────────────────────────────
+    // One entry for the soonest holiday/peak day, once it's within the
+    // lookahead window — gives everyone a heads-up to staff/stock up.
+    const nextHoliday = getUpcomingHolidays(new Date(now), 1)[0];
+    if (nextHoliday && nextHoliday.daysAway <= HOLIDAY_LOOKAHEAD_DAYS) {
+      const isPeak = nextHoliday.type === "peak";
+      const when = nextHoliday.daysAway === 0 ? "today" : nextHoliday.daysAway === 1 ? "tomorrow" : `in ${nextHoliday.daysAway} days`;
+      notifs.push({
+        id:       `holiday-${nextHoliday.month}-${nextHoliday.day}`,
+        priority: nextHoliday.daysAway <= 1 ? 1 : 2,
+        icon:     nextHoliday.icon,
+        color:    isPeak ? "var(--badge-warning-fg)" : C.accent,
+        bg:       isPeak ? "var(--badge-warning-bg)" : `${C.accent}18`,
+        title:    isPeak ? `Peak day coming up: ${nextHoliday.name}` : `Upcoming holiday: ${nextHoliday.name}`,
+        body:     isPeak
+          ? `Expect higher demand ${when} — make sure staffing and stock are ready.`
+          : `The shop calendar flags this ${when} — plan hours and staffing ahead.`,
+        time:     when === "today" ? "Today" : when === "tomorrow" ? "Tomorrow" : nextHoliday.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        category: "holiday",
+      });
+    }
+
     // Deduplicate by id — guards against Firestore sending multiple snapshots
     // during initial sync or reconnect, which can produce repeated entries.
     const seen = new Set();
@@ -301,6 +327,5 @@ export const useTopBarNotifications = ({ role, barberName } = {}) => {
       .sort((a, b) => a.priority - b.priority)
       .slice(0, MAX_NOTIFICATIONS);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inventory, transactions, clients, role, barberName, now]);
 };

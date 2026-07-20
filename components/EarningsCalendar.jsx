@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { C } from "../tokens/design";
 import { Icon } from "./ui";
 import { fmt, toNum } from "../utils/currency";
+import { getHolidayForDate, getHolidaysForMonth, getUpcomingHolidays, holidayDateKey } from "../utils/philippineHolidays";
 
 /* ─── Earnings Calendar ──────────────────────────────────────────────────────
  * Month view showing which days had submitted income. Used on the Dashboard
@@ -74,11 +75,14 @@ const EarningsCalendar = ({ txns = [] }) => {
   // Per-day totals for the visible month, used for both the header total
   // and the heatmap intensity scale.
   const { dayTotals, monthTotal, maxDayTotal } = useMemo(() => {
+    const y = viewDate.getFullYear();
+    const m = viewDate.getMonth();
+    const dim = new Date(y, m + 1, 0).getDate();
     const totals = {};
     let sum = 0;
     let max = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    for (let d = 1; d <= dim; d++) {
+      const key = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const dayTxns = txnsByDay[key] ?? [];
       const total = dayTxns.reduce((s, t) => s + (Number(t.barberCut) || 0), 0);
       totals[key] = total;
@@ -86,7 +90,7 @@ const EarningsCalendar = ({ txns = [] }) => {
       if (total > max) max = total;
     }
     return { dayTotals: totals, monthTotal: sum, maxDayTotal: max };
-  }, [txnsByDay, year, month, daysInMonth]);
+  }, [txnsByDay, viewDate]);
 
   const intensityBg = (ratio) => {
     if (ratio >= 0.85) return `${C.accent}80`;
@@ -94,6 +98,34 @@ const EarningsCalendar = ({ txns = [] }) => {
     if (ratio >= 0.25) return `${C.accent}33`;
     return `${C.accent}14`;
   };
+
+  // Holidays/peak days for the month currently being viewed. When viewing
+  // the real current month we only keep ones that are still upcoming
+  // (today or later); when browsing any other month we show the full list.
+  const thisMonthHolidays = useMemo(() => {
+    const y = viewDate.getFullYear();
+    const m = viewDate.getMonth();
+    const list = getHolidaysForMonth(y, m + 1);
+    const isThisRealMonth = y === today.getFullYear() && m === today.getMonth();
+    if (!isThisRealMonth) return list;
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return list.filter(h => h.date >= startOfToday);
+  }, [viewDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A quick peek at next month's holidays so barbers/admins can plan ahead
+  // even before flipping the calendar forward.
+  const nextMonthHolidays = useMemo(() => {
+    const nm = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+    return getHolidaysForMonth(nm.getFullYear(), nm.getMonth() + 1);
+  }, [viewDate]);
+
+  // The single soonest holiday/peak day from *today*, regardless of which
+  // month is being viewed — powers the always-visible "fast read" banner
+  // at the top so barbers/admins never have to hunt for it.
+  const nextHoliday = useMemo(() => getUpcomingHolidays(today, 1)[0] ?? null, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const nextHolidayUrgent = nextHoliday ? nextHoliday.daysAway <= 3 : false;
+
+  const selectedHoliday = selectedKey ? getHolidayForDate(month + 1, Number(selectedKey.split("-")[2]), year) : null;
 
   const selectedTxns = selectedKey ? (txnsByDay[selectedKey] ?? []) : [];
   const selectedTotal = selectedTxns.reduce((s, t) => s + (Number(t.barberCut) || 0), 0);
@@ -168,6 +200,113 @@ const EarningsCalendar = ({ txns = [] }) => {
       )}
       {streak < 2 && <div style={{ marginBottom: 16 }} />}
 
+      {/* Next-holiday fast-read banner — always visible, always today-relative,
+          so it can be scanned/understood in under a second regardless of
+          which month is currently on screen. */}
+      {nextHoliday && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "12px 16px", borderRadius: 14, marginBottom: 14,
+            background: nextHolidayUrgent ? `${C.accent}22` : `${C.accent}0F`,
+            border: `1.5px solid ${nextHolidayUrgent ? C.accent : `${C.accent}40`}`,
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: nextHolidayUrgent ? C.accent : `${C.accent}26`,
+          }}>
+            <Icon name={nextHoliday.icon} size={18} style={{ color: nextHolidayUrgent ? C.onAccent : C.accent }} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.onSurfaceVariant }}>
+              Next {nextHoliday.type === "peak" ? "peak day" : "holiday"}
+            </p>
+            <p style={{ fontFamily: "Geist", fontSize: 14, fontWeight: 800, color: C.onSurface, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {nextHoliday.name}
+            </p>
+          </div>
+          <div style={{
+            flexShrink: 0, padding: "6px 12px", borderRadius: 999,
+            background: nextHolidayUrgent ? C.accent : C.surfaceLow,
+            fontFamily: "Geist", fontSize: 12, fontWeight: 800,
+            color: nextHolidayUrgent ? C.onAccent : C.accent,
+            whiteSpace: "nowrap",
+          }}>
+            {nextHoliday.daysAway === 0 ? "Today" : nextHoliday.daysAway === 1 ? "Tomorrow" : `In ${nextHoliday.daysAway}d`}
+          </div>
+        </div>
+      )}
+
+      {/* Holidays & Peak-Season reminders (PH) — aware of the month you're viewing */}
+      {(thisMonthHolidays.length > 0 || nextMonthHolidays.length > 0) && (
+        <div style={{ marginBottom: 18 }}>
+          <p style={{ fontFamily: "Geist", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.onSurfaceVariant, marginBottom: 8 }}>
+            Holidays &amp; Peak Days — {MONTHS[month]}
+          </p>
+
+          {thisMonthHolidays.length > 0 ? (
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+              {thisMonthHolidays.map((h) => {
+                const isPeak = h.type === "peak";
+                const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const daysAway = Math.round((h.date - startOfToday) / (1000 * 60 * 60 * 24));
+                const label = isCurrentMonth
+                  ? (daysAway === 0 ? "Today" : daysAway === 1 ? "Tomorrow" : `In ${daysAway} days`)
+                  : h.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                return (
+                  <div
+                    key={`${h.name}-${holidayDateKey(h)}`}
+                    style={{
+                      flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+                      padding: "8px 12px", borderRadius: 12,
+                      background: isPeak ? `${C.accent}14` : C.surfaceLow,
+                      border: `1px solid ${isPeak ? `${C.accent}40` : `${C.outlineVariant}30`}`,
+                    }}
+                  >
+                    <Icon name={h.icon} size={16} style={{ color: isPeak ? C.accent : C.onSurfaceVariant }} />
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: "Geist", fontSize: 11.5, fontWeight: 700, color: C.onSurface, whiteSpace: "nowrap" }}>
+                        {h.name}
+                      </p>
+                      <p style={{ fontFamily: "Geist", fontSize: 10.5, color: isPeak ? C.accent : C.onSurfaceVariant, whiteSpace: "nowrap", fontWeight: isPeak ? 700 : 400 }}>
+                        {label}{isPeak ? " · Peak season" : ""}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{ fontFamily: "Geist", fontSize: 11.5, color: C.onSurfaceVariant, marginBottom: nextMonthHolidays.length ? 8 : 0 }}>
+              No more holidays or peak days this month.
+            </p>
+          )}
+
+          {nextMonthHolidays.length > 0 && (
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", marginTop: 8 }}>
+              {nextMonthHolidays.map((h) => (
+                <div
+                  key={`next-${h.name}-${holidayDateKey(h)}`}
+                  style={{
+                    flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
+                    padding: "6px 10px", borderRadius: 10,
+                    background: C.surfaceLow, border: `1px dashed ${C.outlineVariant}40`,
+                  }}
+                >
+                  <Icon name={h.icon} size={13} style={{ color: C.onSurfaceVariant }} />
+                  <span style={{ fontFamily: "Geist", fontSize: 10.5, fontWeight: 600, color: C.onSurfaceVariant, whiteSpace: "nowrap" }}>
+                    {h.name} · Next month
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+
       {/* Day headers */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
         {DAYS.map(d => (
@@ -189,18 +328,20 @@ const EarningsCalendar = ({ txns = [] }) => {
           const hasTxns   = dayTxns.length > 0;
           const totalCut  = dayTotals[dateKey] ?? 0;
           const ratio     = maxDayTotal > 0 ? totalCut / maxDayTotal : 0;
+          const holiday   = getHolidayForDate(month + 1, day, year);
 
           return (
             <button
               key={dateKey}
               onClick={() => setSelectedKey(isSelected ? null : dateKey)}
               style={{
+                position: "relative",
                 borderRadius: 10, padding: "8px 4px",
                 textAlign: "center", cursor: "pointer",
                 background: isToday ? C.accent : hasTxns ? intensityBg(ratio) : "transparent",
                 border: isSelected
                   ? `1.5px solid ${C.accent}`
-                  : isToday ? "none" : hasTxns ? `1.5px solid ${C.accent}30` : "1.5px solid transparent",
+                  : isToday ? "none" : holiday ? `1.5px dashed ${C.accent}60` : hasTxns ? `1.5px solid ${C.accent}30` : "1.5px solid transparent",
                 boxShadow: isSelected ? `0 0 0 3px ${C.accent}20` : "none",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
@@ -213,6 +354,18 @@ const EarningsCalendar = ({ txns = [] }) => {
               }}>
                 {day}
               </p>
+              {holiday && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 3, padding: "0 2px" }}>
+                  <Icon name={holiday.icon} size={8} style={{ color: isToday ? C.onAccent : C.accent, flexShrink: 0 }} />
+                  <span style={{
+                    fontFamily: "Geist", fontSize: 8, fontWeight: 700,
+                    color: isToday ? C.onAccent : C.accent,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 52,
+                  }}>
+                    {holiday.short}
+                  </span>
+                </div>
+              )}
               {hasTxns && (
                 <div style={{ display: "flex", justifyContent: "center", gap: 2, marginTop: 4 }}>
                   {dayTxns.slice(0, 3).map((_, di) => (
@@ -242,6 +395,21 @@ const EarningsCalendar = ({ txns = [] }) => {
               <p style={{ fontFamily: "Geist", fontSize: 13.5, fontWeight: 700, color: C.onSurface }}>
                 {selectedLabel}
               </p>
+              {selectedHoliday && (
+                <div style={{ marginTop: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <Icon name={selectedHoliday.icon} size={13} style={{ color: C.accent }} />
+                    <p style={{ fontFamily: "Geist", fontSize: 11.5, fontWeight: 700, color: C.accent }}>
+                      {selectedHoliday.name}{selectedHoliday.type === "peak" ? " · Peak season" : ""}
+                    </p>
+                  </div>
+                  {selectedHoliday.note && (
+                    <p style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>
+                      {selectedHoliday.note}
+                    </p>
+                  )}
+                </div>
+              )}
               {selectedTxns.length > 0 && (
                 <p style={{ fontFamily: "Geist", fontSize: 11.5, color: C.onSurfaceVariant, marginTop: 2 }}>
                   {selectedTxns.length} transaction{selectedTxns.length > 1 ? "s" : ""} · {fmt(selectedTotal)} earned
@@ -301,6 +469,10 @@ const EarningsCalendar = ({ txns = [] }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div style={{ width: 10, height: 10, borderRadius: 3, background: C.accent }} />
           <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant }}>Today</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon name="celebration" size={12} style={{ color: C.accent }} />
+          <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant }}>Holiday / Peak day</span>
         </div>
         <span style={{ fontFamily: "Geist", fontSize: 11, color: C.onSurfaceVariant, marginLeft: "auto" }}>
           Tap a day for details

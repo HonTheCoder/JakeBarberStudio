@@ -343,6 +343,7 @@ const ClientDetailModal = ({ client, role, onClose, onEdit, onDelete, initialTab
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {[
                     { icon: "phone",       label: "Contact",   val: client.phone   ?? "—" },
+                    { icon: "cake",        label: "Age",       val: client.age != null && client.age !== "" ? `${client.age} yrs old` : "—" },
                     { icon: "mail",        label: "Email",     val: client.email   ?? "—" },
                     { icon: "content_cut", label: "Barber",    val: client.barber  ?? "—" },
                   ].map(row => (

@@ -7,6 +7,7 @@ import { C } from "../tokens/design";
 import { KpiCard, SectionTitle, SecondaryBtn, PrimaryBtn } from "../components/ui";
 import { NewSaleModal } from "../components/modals";
 import { useStats } from "../hooks/useStats";
+import { useClients } from "../hooks/useFirestore";
 import { useSettingsContext } from "../context/useSettingsContext";
 import useIsMobile from "../hooks/useIsMobile";
 import { fmt, toNum, parseDate } from "../utils/currency";
@@ -38,12 +39,22 @@ const StatRow = ({ label, value, highlight = false, last = false }) => (
 
 const TOOLTIP_STYLE = { background: C.surfaceLowest, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, fontFamily: "Inter", fontSize: 13, color: C.onSurface, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" };
 
+const AGE_BRACKETS = [
+  { label: "Under 18", test: a => a < 18 },
+  { label: "18–24",    test: a => a >= 18 && a <= 24 },
+  { label: "25–34",    test: a => a >= 25 && a <= 34 },
+  { label: "35–44",    test: a => a >= 35 && a <= 44 },
+  { label: "45–54",    test: a => a >= 45 && a <= 54 },
+  { label: "55+",      test: a => a >= 55 },
+];
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 const ReportsPage = () => {
   const [revPeriod, setRevPeriod] = useState("Monthly");
   const [showModal, setShowModal] = useState(false);
   const isMobile = useIsMobile();
   const { stats, loading } = useStats();
+  const { data: clients = [] } = useClients();
   const { settings } = useSettingsContext();
   const shop = {
     name:    settings?.shop?.name    || "Jake Barber Studio",
@@ -52,6 +63,21 @@ const ReportsPage = () => {
     phone:   settings?.shop?.phone   || "",
     address: settings?.shop?.address || "",
   };
+
+  const ageDemographics = useMemo(() => {
+    const withAge = (clients ?? []).filter(c => c.age != null && c.age !== "" && !isNaN(Number(c.age)));
+    const buckets = AGE_BRACKETS.map(b => ({ label: b.label, count: 0 }));
+    withAge.forEach(c => {
+      const age = Number(c.age);
+      const idx = AGE_BRACKETS.findIndex(b => b.test(age));
+      if (idx !== -1) buckets[idx].count++;
+    });
+    const totalWithAge = withAge.length;
+    const withPct = buckets.map(b => ({ ...b, pct: totalWithAge ? Math.round((b.count / totalWithAge) * 100) : 0 }));
+    const top = withPct.reduce((max, b) => (b.count > max.count ? b : max), withPct[0] ?? { label: "—", count: 0, pct: 0 });
+    const avgAge = totalWithAge ? Math.round(withAge.reduce((s, c) => s + Number(c.age), 0) / totalWithAge) : null;
+    return { buckets: withPct, top, totalWithAge, avgAge, totalClients: (clients ?? []).length };
+  }, [clients]);
 
   const exportPDF = () => {
     const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -349,6 +375,57 @@ const ReportsPage = () => {
             </Card>
           ))
         )}
+      </div>
+
+      {/* Customer Demographics */}
+      <SectionTitle title="Customer Demographics" subtitle="Age breakdown to help you understand who your clients are" />
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr", gap: isMobile ? 16 : 24, marginBottom: isMobile ? 28 : 40 }}>
+        <Card>
+          <CardInner>
+            <ChartTitle title="Clients by Age Group" sub="How many clients fall into each age bracket" />
+            {ageDemographics.totalWithAge === 0 ? (
+              <div style={{ textAlign: "center", padding: 40, color: C.onSurfaceVariant, fontSize: 13 }}>
+                No age data yet — ages you add when creating clients will show up here.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={ageDemographics.buckets}>
+                  <CartesianGrid vertical={false} stroke={C.outlineVariant} opacity={0.35} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: C.onSurfaceVariant }} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "var(--c-accent-soft)" }}
+                    formatter={(v, n, p) => [`${v} client${v === 1 ? "" : "s"} (${p.payload.pct}%)`, ""]} />
+                  <Bar dataKey="count" fill={C.accent} radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardInner>
+        </Card>
+
+        <Card>
+          <CardInner>
+            <ChartTitle title="Age Insights" sub="Quick takeaways for your marketing & services" />
+            {ageDemographics.totalWithAge === 0 ? (
+              <div style={{ textAlign: "center", padding: 40, color: C.onSurfaceVariant, fontSize: 13 }}>
+                Add client ages to unlock this insight.
+              </div>
+            ) : (
+              <>
+                <div style={{ background: "var(--c-accent-soft)", border: `1px solid ${C.accent}30`, borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.accent, marginBottom: 6 }}>
+                    Most Common Age Group
+                  </p>
+                  <p style={{ fontFamily: "Geist", fontSize: 26, fontWeight: 700, color: C.primary }}>{ageDemographics.top.label}</p>
+                  <p style={{ fontSize: 12, color: C.onSurfaceVariant, marginTop: 4 }}>
+                    {ageDemographics.top.count} of {ageDemographics.totalWithAge} clients ({ageDemographics.top.pct}%)
+                  </p>
+                </div>
+                <StatRow label="Average Age" value={ageDemographics.avgAge != null ? `${ageDemographics.avgAge} yrs` : "—"} />
+                <StatRow label="Clients with Age on File" value={`${ageDemographics.totalWithAge} of ${ageDemographics.totalClients}`} last />
+              </>
+            )}
+          </CardInner>
+        </Card>
       </div>
 
       {/* Transaction Log */}
